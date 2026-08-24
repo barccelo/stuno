@@ -5,39 +5,39 @@ import { useEffect, useRef, useState } from "react";
 export default function TurnNoticeWatcher() {
   const [visible, setVisible] = useState(false);
   const wasMyTurn = useRef(false);
-  const showTimer = useRef<number | null>(null);
   const hideTimer = useRef<number | null>(null);
 
   useEffect(() => {
+    const show = () => {
+      setVisible(true);
+      if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+      hideTimer.current = window.setTimeout(() => setVisible(false), 1550);
+    };
+
     const evaluate = () => {
-      const label = document.querySelector(".turn-center strong");
-      const isMyTurn = label?.textContent?.trim() === "Tu turno";
+      const labels = Array.from(document.querySelectorAll(".turn-center strong"));
+      const isMyTurn = labels.some((node) => node.textContent?.trim() === "Tu turno");
 
-      if (isMyTurn && !wasMyTurn.current) {
-        if (showTimer.current !== null) window.clearTimeout(showTimer.current);
-        showTimer.current = window.setTimeout(() => {
-          if (!document.querySelector(".turn-notice")) {
-            setVisible(true);
-            if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
-            hideTimer.current = window.setTimeout(() => setVisible(false), 1600);
-          }
-        }, 100);
-      }
-
+      if (isMyTurn && !wasMyTurn.current) show();
       wasMyTurn.current = isMyTurn;
     };
 
     evaluate();
+
+    // React updates normally trigger this observer. The short interval is an
+    // additional safeguard for mobile browsers where a DOM mutation can be
+    // coalesced while the tab or viewport is settling.
     const observer = new MutationObserver(evaluate);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       characterData: true,
     });
+    const interval = window.setInterval(evaluate, 180);
 
     return () => {
       observer.disconnect();
-      if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+      window.clearInterval(interval);
       if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
     };
   }, []);
@@ -55,13 +55,8 @@ export default function TurnNoticeWatcher() {
   if (!visible) return null;
 
   return (
-    <button
-      type="button"
-      className="turn-notice-fallback"
-      onClick={() => setVisible(false)}
-      aria-live="assertive"
-    >
-      ¡Te toca!
-    </button>
+    <div className="turn-notice-fallback" role="status" aria-live="assertive">
+      <strong>¡Te toca!</strong>
+    </div>
   );
 }
