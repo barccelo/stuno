@@ -26,4 +26,4 @@ El secreto `CATEGORY_ADMIN_KEY` debe configurarse en Cloudflare y no debe guarda
 
 ## Publicación
 
-La rama `main` es la fuente de producción desplegada en Cloudflare.
+La rama `main` es la fuente de producción desplegada en Cloudflare. La integración de compilación quedó reconectada el 24 de agosto de 2026.
