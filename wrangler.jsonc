@@ -7,9 +7,6 @@
   "assets": {
     "binding": "ASSETS"
   },
-  "images": {
-    "binding": "IMAGES"
-  },
   "d1_databases": [
     {
       "binding": "DB",
