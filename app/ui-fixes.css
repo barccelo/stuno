@@ -1,8 +1,7 @@
-/* Targeted UI fixes: dragged action card, vote alignment and turn notice. */
+/* Targeted UI fixes: dragged action card, vote alignment, notices and reduced motion. */
 
 /* BLOQUEAR TURNO: while dragging, use the block symbol instead of the long text.
-   cardClass() maps stop cards to "coral", so the dragged preview does not carry
-   a separate .stop class. */
+   Keep it visually aligned with the size of the other action-card symbols. */
 .drag-ghost.coral {
   overflow: hidden !important;
   padding: 0 !important;
@@ -15,10 +14,10 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   transform: translate(-50%, -50%);
-  border: 5px solid rgba(255,255,255,.96);
+  border: 4px solid rgba(255,255,255,.96);
   border-radius: 50%;
   box-sizing: border-box;
 }
@@ -27,11 +26,15 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 54px;
-  height: 5px;
+  width: 40px;
+  height: 4px;
   border-radius: 999px;
   background: rgba(255,255,255,.96);
   transform: translate(-50%, -50%) rotate(45deg);
+}
+.play-card.action.stop .card-corner .material-icon {
+  width: 12px !important;
+  height: 12px !important;
 }
 
 /* Voting card: symmetric side columns keep the submitted word centered against
@@ -71,36 +74,34 @@
   height: 1px;
 }
 
-/* The original .turn-notice is deliberately hidden. The reliable watcher below
-   owns the brief turn card, avoiding two competing notices. */
+/* The original page notice stays hidden; the client watcher positions the
+   brief card directly over the dotted play pile. */
 .turn-notice {
   display: none !important;
 }
 .turn-notice-fallback {
   position: fixed;
-  left: 50%;
-  top: 43%;
   z-index: 1000;
-  min-width: 190px;
-  max-width: calc(100vw - 40px);
+  min-width: 154px;
+  max-width: calc(100vw - 32px);
   transform: translate(-50%, -50%);
   opacity: 1;
   visibility: visible;
-  border: 1px solid rgba(255,255,255,.55);
-  border-radius: 18px;
-  background: rgba(255,255,255,.90);
+  border: 1px solid rgba(255,255,255,.48);
+  border-radius: 15px;
+  background: rgba(255,255,255,.88);
   color: var(--ink, #14213d);
-  padding: 20px 28px;
+  padding: 16px 22px;
   text-align: center;
-  box-shadow: 0 22px 60px rgba(0,0,0,.35);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 16px 42px rgba(0,0,0,.32);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
   pointer-events: auto;
 }
 .turn-notice-fallback strong {
   display: block;
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.05;
   font-weight: 950;
   letter-spacing: -.02em;
@@ -110,15 +111,16 @@
   position: absolute;
   left: 50%;
   top: 0;
-  width: 56px;
-  height: 4px;
+  width: 48px;
+  height: 3px;
   border-radius: 0 0 999px 999px;
   background: var(--gold, #f4bd3b);
   transform: translateX(-50%);
 }
 
-/* Motion is purely decorative. The notice is fully visible by default so
-   Android's "Remove animations" / reduced-motion setting cannot hide it. */
+/* Motion is decorative. When the OS removes animation, keep the visual feedback
+   on screen for the same React-controlled lifetime instead of collapsing it to
+   an invisible final keyframe. */
 @media (prefers-reduced-motion: no-preference) {
   .turn-notice-fallback {
     animation: turnNoticeCard 1.55s ease both;
@@ -129,6 +131,22 @@
     animation: none !important;
     opacity: 1 !important;
     transform: translate(-50%, -50%) !important;
+  }
+  .card-flight {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: translate(-50%, -50%) scale(.82) !important;
+  }
+  .incoming-card {
+    animation: none !important;
+    opacity: 1 !important;
+    top: 68% !important;
+    transform: translate(calc(-50% + var(--draw-offset)), -50%) rotate(var(--draw-tilt)) scale(.9) !important;
+  }
+  .last-play,
+  .center-pile-card {
+    animation: none !important;
+    opacity: 1 !important;
   }
 }
 @keyframes turnNoticeCard {
@@ -151,14 +169,10 @@
     width: 54px;
   }
   .turn-notice-fallback {
-    min-width: 176px;
-    padding: 18px 24px;
+    min-width: 146px;
+    padding: 15px 20px;
   }
   .turn-notice-fallback strong {
-    font-size: 21px;
+    font-size: 19px;
   }
-}
-
-@media (orientation: landscape) and (max-height: 650px) {
-  .turn-notice-fallback { top: 50%; }
 }
