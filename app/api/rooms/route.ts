@@ -58,11 +58,13 @@ function player(state: GameState, playerId: string) {
 function cardFrom(hand: GameCard[], cardId: string) {
   return hand.find((item) => item.id === cardId);
 }
-function startsWith(answer: string, card: GameCard) {
-  return (
-    card.kind === "joker" ||
-    normalized(answer).startsWith(normalized(card.label))
-  );
+function matchesLetter(answer: string, card: GameCard, mode: unknown) {
+  if (card.kind === "joker") return true;
+  const letter = normalized(card.label);
+  const word = normalized(answer);
+  return mode === "contains" && ["Ñ", "Y", "Q", "Z"].includes(card.label.toUpperCase())
+    ? word.includes(letter)
+    : word.startsWith(letter);
 }
 function drawWithEvent(state: GameState, target: Player, count = 1) {
   draw(state, target, count);
@@ -376,10 +378,22 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       if (state.status !== "lobby" && !spectator)
+      {
+        const returning = state.players.find(
+          (item) => normalized(item.name) === normalized(name),
+        );
+        if (returning)
+          return Response.json({
+            code: roomCode,
+            playerId: returning.id,
+            reconnected: true,
+            state: publicState(state, returning.id),
+          });
         return Response.json(
-          { error: "La partida ya comenzó" },
+          { error: "La partida ya comenzó. Para recuperar tu mano, entra con el mismo nombre." },
           { status: 409 },
         );
+      }
       if (spectator) state.spectators.push({ id: newId, name });
       else state.players.push({ id: newId, name, hand: [], wins: 0 });
       await save(state);
@@ -581,7 +595,10 @@ export async function POST(request: Request) {
           { error: "Se necesitan al menos 2 jugadores" },
           { status: 409 },
         );
-      for (const item of state.players) draw(state, item, 8);
+      for (const item of state.players) {
+        if (item.hand.length) state.discard.push(...item.hand.splice(0));
+        draw(state, item, 8);
+      }
       state.status = "playing";
       const startedAt = Date.now();
       state.pausedAt = startedAt;
@@ -696,7 +713,7 @@ export async function POST(request: Request) {
         if (
           answer &&
           !oralResponse &&
-          (!startsWith(answer, card) ||
+          (!matchesLetter(answer, card, body.matchMode) ||
             state.acceptedWords.includes(normalized(answer)))
         )
           return Response.json(
@@ -707,6 +724,8 @@ export async function POST(request: Request) {
           playerId,
           cardId,
           answer: answer || "Respuesta oral",
+          cardLabel: card.label,
+          matchMode: body.matchMode === "contains" ? "contains" as const : "starts" as const,
         };
         if (state.settings.mode === "simultaneous") {
           state.submissions[playerId] = submission;
@@ -797,6 +816,23 @@ export async function POST(request: Request) {
           nextIndex(state);
         }
       }
+    } else if (action === "discardCard") {
+      if (state.status !== "playing" || state.pausedAt)
+        return Response.json({ error: "La partida no está activa" }, { status: 409 });
+      if (state.settings.mode === "classic" && state.players[state.turnIndex]?.id !== playerId)
+        return Response.json({ error: "No es tu turno" }, { status: 409 });
+      if (state.settings.mode !== "classic")
+        return Response.json({ error: "Desechar está disponible en partidas por turnos" }, { status: 409 });
+      if (state.pendingLive || state.pendingVote || state.pendingPenalty)
+        return Response.json({ error: "Primero resuelve la jugada pendiente" }, { status: 409 });
+      const card = cardFrom(actor!.hand, String(body.cardId ?? ""));
+      if (!card) return Response.json({ error: "Carta no disponible" }, { status: 409 });
+      actor!.hand = actor!.hand.filter((item) => item.id !== card.id);
+      state.discard.push(card);
+      recordCenterPlay(state, actor!, card);
+      drawWithEvent(state, actor!, 2);
+      state.message = `${actor!.name} desechó una carta y recibió dos.`;
+      nextIndex(state);
     } else if (action === "allocatePenalty") {
       const pending = state.pendingPenalty;
       if (!pending)
