@@ -6,6 +6,8 @@ import { DEFAULT_CATEGORY_CARDS } from "../../../lib/categories";
 
 type CategoryInput = { easy: string; medium: string; expert: string };
 
+const INSERT_BATCH_SIZE = 15;
+
 function configuredAdminKey() {
   return env.CATEGORY_ADMIN_KEY;
 }
@@ -37,17 +39,24 @@ async function readOrSeedCategories() {
   const db = getDb();
   let rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   if (!rows.length) {
-    const updatedAt = new Date().toISOString();
-    await db.insert(categoryCards).values(
-      DEFAULT_CATEGORY_CARDS.map((card, sortOrder) => ({
-        ...card,
-        sortOrder,
-        updatedAt,
-      })),
-    );
+    await insertCategories(DEFAULT_CATEGORY_CARDS);
     rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   }
   return rows.map(({ easy, medium, expert }) => ({ easy, medium, expert }));
+}
+
+async function insertCategories(cards: CategoryInput[]) {
+  const db = getDb();
+  const updatedAt = new Date().toISOString();
+  for (let offset = 0; offset < cards.length; offset += INSERT_BATCH_SIZE) {
+    await db.insert(categoryCards).values(
+      cards.slice(offset, offset + INSERT_BATCH_SIZE).map((card, index) => ({
+        ...card,
+        sortOrder: offset + index,
+        updatedAt,
+      })),
+    );
+  }
 }
 
 export async function GET(request: Request) {
@@ -71,10 +80,7 @@ export async function PUT(request: Request) {
     return Response.json({ error: "Revisa que cada tarjeta tenga sus tres categorías." }, { status: 400 });
 
   const db = getDb();
-  const updatedAt = new Date().toISOString();
   await db.delete(categoryCards);
-  await db.insert(categoryCards).values(
-    clean.map((card, sortOrder) => ({ ...card, sortOrder, updatedAt })),
-  );
+  await insertCategories(clean);
   return Response.json({ categories: clean });
 }
