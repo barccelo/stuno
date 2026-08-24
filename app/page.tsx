@@ -1159,17 +1159,32 @@ export default function Home() {
     const item =
       wheel?.querySelector<HTMLElement>(
         '[data-selected="true"][data-cycle="2"]',
-      ) ?? wheel?.querySelector<HTMLElement>('[data-cycle="2"]');
+      ) ??
+      wheel?.querySelector<HTMLElement>('[data-selected="true"]') ??
+      wheel?.querySelector<HTMLElement>('[data-cycle="2"]') ??
+      wheel?.querySelector<HTMLElement>("[data-category-index]");
     if (!wheel || !item) return;
     const top = item.offsetTop - (wheel.clientHeight - item.offsetHeight) / 2;
     wheel.scrollTo({ top: Math.max(0, top), behavior });
   }
+  function categoryWheelOptions(cards: Room["categories"]) {
+    const levels = ["easy", "medium", "expert"] as const;
+    const seen = new Set<string>();
+    return cards
+      .flatMap((card, cardIndex) =>
+        levels.map((level) => ({ text: card[level], level, cardIndex })),
+      )
+      .filter(({ text }) => {
+        const key = text.trim().toLocaleLowerCase("es").replace(/\s+/g, " ");
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((option, index) => ({ ...option, index }));
+  }
   async function animateCategoryShuffle() {
     if (!room || shuffling) return;
-    const levels = ["easy", "medium", "expert"] as const;
-    const options = room.categories.flatMap((card, cardIndex) =>
-      levels.map((level) => ({ text: card[level], level, cardIndex })),
-    );
+    const options = categoryWheelOptions(room.categories);
     if (!options.length) return;
     const currentIndex = options.findIndex(
       (option) =>
@@ -1275,15 +1290,12 @@ export default function Home() {
   function categoryBrowser() {
     if (!room || playerId !== room.hostId) return null;
     const query = categorySearch.trim().toLocaleLowerCase("es");
-    const levels = ["easy", "medium", "expert"] as const;
-    const allOptions = room.categories.flatMap((card, cardIndex) =>
-      levels.map((level) => ({ text: card[level], level, cardIndex })),
-    );
+    const allOptions = categoryWheelOptions(room.categories);
     const filtered = allOptions
-      .map((option, index) => ({ ...option, index }))
       .filter(
         ({ text }) => !query || text.toLocaleLowerCase("es").includes(query),
       );
+    const cycleCount = query ? 1 : 5;
     const selectedText = room.selectedCategory?.text ?? allOptions[0]?.text;
     const selectedLevel = room.selectedCategory?.level ?? allOptions[0]?.level;
     const selectedFlatIndex = allOptions.findIndex(
@@ -1299,7 +1311,7 @@ export default function Home() {
           onScroll={previewCategoryScroll}
         >
           <div className="category-wheel-track">
-            {Array.from({ length: 5 }).flatMap((_, cycle) =>
+            {Array.from({ length: cycleCount }).flatMap((_, cycle) =>
               filtered.map(({ text, level, cardIndex, index }) => {
                 const isSelected =
                   text === selectedText && level === selectedLevel;

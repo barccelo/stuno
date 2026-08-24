@@ -26,8 +26,10 @@ function code() {
   ).join("");
 }
 function publicState(state: GameState, playerId: string) {
+  const publicRoom = { ...state };
+  delete publicRoom.departedPlayers;
   return {
-    ...state,
+    ...publicRoom,
     deck: { count: state.deck.length },
     players: state.players.map((player) => ({
       ...player,
@@ -101,6 +103,23 @@ function applyAccepted(state: GameState, submission: Submission) {
   state.acceptedWords.push(normalized(submission.answer));
   const finishAfter = owner.hand.length === 0 && card.kind !== "category";
   if (card.penalty) {
+    if (state.players.length === 2) {
+      const target = state.players.find((item) => item.id !== owner.id);
+      if (target) {
+        drawWithEvent(state, target, card.penalty);
+        state.lastEvent = {
+          kind: "penalty",
+          actorId: owner.id,
+          actorName: owner.name,
+          targets: [{ id: target.id, name: target.name, count: card.penalty }],
+          amount: card.penalty,
+          at: Date.now(),
+        };
+        state.message = `${target.name} recibe +${card.penalty} automáticamente.`;
+      }
+      if (finishAfter) declareWinner(state, owner);
+      return false;
+    }
     state.pendingPenalty = {
       playerId: owner.id,
       total: card.penalty,
@@ -310,6 +329,7 @@ export async function POST(request: Request) {
           difficulty: "mixed",
         },
         players: [host],
+        departedPlayers: [],
         spectators: [],
         deck,
         discard: [],
@@ -372,11 +392,6 @@ export async function POST(request: Request) {
           { error: "Esta partida ya terminó. Crea o elige una sala nueva." },
           { status: 410 },
         );
-      if (!spectator && state.players.length >= 8)
-        return Response.json(
-          { error: "La sala ya tiene 8 jugadores" },
-          { status: 409 },
-        );
       if (state.status !== "lobby" && !spectator)
       {
         const returning = state.players.find(
@@ -389,11 +404,39 @@ export async function POST(request: Request) {
             reconnected: true,
             state: publicState(state, returning.id),
           });
+        const departedIndex = state.departedPlayers?.findIndex(
+          (item) => normalized(item.player.name) === normalized(name),
+        ) ?? -1;
+        if (departedIndex >= 0) {
+          const [departed] = state.departedPlayers!.splice(departedIndex, 1);
+          const currentId = state.players[state.turnIndex]?.id;
+          const restoredIndex = Math.min(departed.index, state.players.length);
+          state.players.splice(restoredIndex, 0, departed.player);
+          if (currentId) {
+            const currentIndex = state.players.findIndex(
+              (item) => item.id === currentId,
+            );
+            if (currentIndex >= 0) state.turnIndex = currentIndex;
+          }
+          state.message = `${departed.player.name} volvió a la partida con su mano.`;
+          await save(state);
+          return Response.json({
+            code: roomCode,
+            playerId: departed.player.id,
+            reconnected: true,
+            state: publicState(state, departed.player.id),
+          });
+        }
         return Response.json(
           { error: "La partida ya comenzó. Para recuperar tu mano, entra con el mismo nombre." },
           { status: 409 },
         );
       }
+      if (!spectator && state.players.length >= 8)
+        return Response.json(
+          { error: "La sala ya tiene 8 jugadores" },
+          { status: 409 },
+        );
       if (spectator) state.spectators.push({ id: newId, name });
       else state.players.push({ id: newId, name, hand: [], wins: 0 });
       await save(state);
@@ -417,6 +460,20 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       const leaving = state.players[leavingIndex];
+      if (state.status === "playing" && playerId !== state.hostId) {
+        state.departedPlayers ??= [];
+        state.departedPlayers = state.departedPlayers.filter(
+          (item) => item.player.id !== leaving.id,
+        );
+        state.departedPlayers.push({
+          player: leaving,
+          index: leavingIndex,
+          leftAt: Date.now(),
+        });
+        state.departedPlayers = state.departedPlayers
+          .sort((a, b) => b.leftAt - a.leftAt)
+          .slice(0, 8);
+      }
       state.players.splice(leavingIndex, 1);
       state.spectators = state.spectators.filter(
         (item) => item.id !== playerId,

@@ -53,6 +53,11 @@ export type GameState = {
     difficulty: "easy" | "medium" | "expert" | "mixed";
   };
   players: Player[];
+  departedPlayers?: {
+    player: Player;
+    index: number;
+    leftAt: number;
+  }[];
   spectators: { id: string; name: string }[];
   deck: GameCard[];
   discard: GameCard[];
