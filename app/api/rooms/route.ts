@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { getDb } from "../../../db";
+import { ensureSchema, getDb } from "../../../db";
 import { rooms } from "../../../db/schema";
 import {
   categories,
@@ -206,6 +206,7 @@ function finalizeStartCountdown(state: GameState) {
 }
 
 export async function GET(request: Request) {
+  await ensureSchema();
   const url = new URL(request.url);
   const roomCode = (url.searchParams.get("code") ?? "").toUpperCase();
   const playerId = url.searchParams.get("playerId") ?? "";
@@ -265,6 +266,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await ensureSchema();
     const body = (await request.json()) as Record<string, unknown>;
     const action = String(body.action ?? "");
     if (action === "create") {

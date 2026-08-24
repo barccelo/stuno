@@ -1,6 +1,6 @@
 import { asc } from "drizzle-orm";
 import { env } from "cloudflare:workers";
-import { getDb } from "../../../db";
+import { ensureSchema, getDb } from "../../../db";
 import { categoryCards } from "../../../db/schema";
 import { DEFAULT_CATEGORY_CARDS } from "../../../lib/categories";
 
@@ -51,6 +51,7 @@ async function readOrSeedCategories() {
 }
 
 export async function GET(request: Request) {
+  await ensureSchema();
   const url = new URL(request.url);
   if (url.searchParams.get("verify") === "1") {
     return authorized(request)
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  await ensureSchema();
   if (!authorized(request))
     return Response.json({ error: "Clave administrativa incorrecta." }, { status: 401 });
   const body = (await request.json().catch(() => null)) as { categories?: unknown } | null;
