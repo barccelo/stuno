@@ -108,7 +108,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}.game-shell{width:100%;max
 @media(max-width:760px){.back,.icon-button,.game-topbar .icon-button{width:34px;height:34px;flex-basis:34px}.back .material-icon,.icon-button .material-icon{width:18px;height:18px}.panel-heading{gap:12px}.category-browser-top{align-items:stretch;flex-direction:column}.category-search{width:100%}.category-wheel{max-height:250px}.category-wheel-track{grid-template-rows:repeat(2,116px);grid-auto-columns:205px}.starter-picker{flex-direction:column;gap:7px}.waiting-card{margin:20px auto}.waiting-card h1{font-size:clamp(31px,10vw,48px)}}
 
 /* V11 · Restore the pre-icon hero-card composition only */
-.brand-lockup{display:flex;align-items:center;gap:8px}.version-label{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;background:#e8edfc;color:var(--blue);font-size:9px;font-weight:950;letter-spacing:.08em}
+.brand-lockup{display:flex;align-items:center;gap:8px}
 @media(max-width:760px){
   .home-grid{display:block;min-height:calc(100vh - 62px)}
   .hero-copy{padding:45px 22px 25px}

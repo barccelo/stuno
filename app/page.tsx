@@ -2180,12 +2180,6 @@ export default function Home() {
             <span>STU</span>
             <b>NO</b>
           </button>
-          <small
-            className="version-label"
-            title="V43 · Stuno y categorías persistentes"
-          >
-            V43
-          </small>
         </div>
         <button
           className="rules-button"
