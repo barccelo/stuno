@@ -22,6 +22,7 @@ function cleanCategories(value: unknown): CategoryInput[] | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 500)
     return null;
   const result: CategoryInput[] = [];
+  const seen = new Set<string>();
   for (const item of value) {
     if (!item || typeof item !== "object") return null;
     const row = item as Record<string, unknown>;
@@ -30,9 +31,14 @@ function cleanCategories(value: unknown): CategoryInput[] | null {
     const expert = typeof row.expert === "string" ? row.expert.trim() : "";
     if (!easy || !medium || !expert || [easy, medium, expert].some((text) => text.length > 100))
       return null;
+    const fingerprint = [easy, medium, expert]
+      .map((text) => text.toLocaleLowerCase("es").replace(/\s+/g, " "))
+      .join("\u0000");
+    if (seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
     result.push({ easy, medium, expert });
   }
-  return result;
+  return result.length ? result : null;
 }
 
 async function readOrSeedCategories() {
@@ -42,7 +48,8 @@ async function readOrSeedCategories() {
     await insertCategories(DEFAULT_CATEGORY_CARDS);
     rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   }
-  return rows.map(({ easy, medium, expert }) => ({ easy, medium, expert }));
+  const mapped = rows.map(({ easy, medium, expert }) => ({ easy, medium, expert }));
+  return cleanCategories(mapped) ?? mapped;
 }
 
 async function insertCategories(cards: CategoryInput[]) {
