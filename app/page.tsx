@@ -48,6 +48,8 @@ type Room = {
     cardId: string;
     answer: string;
     votes: Record<string, boolean>;
+    cardLabel?: string;
+    matchMode?: "starts" | "contains";
   } | null;
   selectedCategory?: {
     level: "easy" | "medium" | "expert";
@@ -303,6 +305,9 @@ export default function Home() {
     "az" | "za" | "special-first" | "special-last"
   >("az");
   const [letterOrder, setLetterOrder] = useState<"az" | "za">("az");
+  const [randomOrder, setRandomOrder] = useState<Record<string, number> | null>(null);
+  const [matchMode, setMatchMode] = useState<"starts" | "contains">("starts");
+  const [turnNotice, setTurnNotice] = useState(false);
   const lastDrawAt = useRef(0);
   const [dragging, setDragging] = useState<{
     card: GameCard;
@@ -337,6 +342,8 @@ export default function Home() {
   const hand = me?.hand ?? [];
   const sortedHand = useMemo(() => {
     const cards = [...hand];
+    if (randomOrder)
+      return cards.sort((a, b) => (randomOrder[a.id] ?? 0) - (randomOrder[b.id] ?? 0));
     const isSpecial = (card: GameCard) => card.kind !== "letter";
     if (sortMode === "az" || sortMode === "za")
       return cards.sort((a, b) => {
@@ -354,7 +361,7 @@ export default function Home() {
       });
       return letterOrder === "az" ? result : -result;
     });
-  }, [hand, sortMode, letterOrder]);
+  }, [hand, sortMode, letterOrder, randomOrder]);
   const current = room?.players[room.turnIndex];
   const categoryChooserId = room
     ? (room.categoryChooserId ??
@@ -579,6 +586,17 @@ export default function Home() {
     const timer = window.setTimeout(() => setIncomingCards(0), 1200);
     return () => window.clearTimeout(timer);
   }, [myLatestDraw?.at, playerId]);
+  const previousTurnId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const turnId = room?.players[room.turnIndex]?.id;
+    if (room?.status === "playing" && !room.pausedAt && turnId === playerId && previousTurnId.current !== playerId) {
+      setTurnNotice(true);
+      const timer = window.setTimeout(() => setTurnNotice(false), 1600);
+      previousTurnId.current = turnId;
+      return () => window.clearTimeout(timer);
+    }
+    previousTurnId.current = turnId;
+  }, [room?.turnIndex, room?.status, room?.pausedAt, playerId]);
   useEffect(() => {
     setPenaltyAllocations({});
   }, [
@@ -672,6 +690,7 @@ export default function Home() {
     event: React.PointerEvent<HTMLElement>,
   ) {
     const target = event.target as HTMLElement;
+    if (turnNotice && !target.closest(".turn-notice")) setTurnNotice(false);
     if (
       room?.pendingLive &&
       room.pendingLive.playerId !== playerId &&
@@ -925,9 +944,10 @@ export default function Home() {
     if (!card) return;
     const submitted = answer;
     animatePlay(card, () => {
-      void act("play", { cardId: selected, answer: submitted });
+      void act("play", { cardId: selected, answer: submitted, matchMode });
       setSelected(null);
       setAnswer("");
+      setMatchMode("starts");
     });
   }
   function cardClass(card: GameCard) {
@@ -973,6 +993,12 @@ export default function Home() {
         : kind === "joker"
           ? "★"
           : label;
+  }
+  function highlightedAnswer(word: string, letter?: string) {
+    if (!letter || letter === "★") return word;
+    const index = word.toLocaleLowerCase("es").indexOf(letter.toLocaleLowerCase("es"));
+    if (index < 0) return word;
+    return <>{word.slice(0, index)}<mark>{word.slice(index, index + letter.length)}</mark>{word.slice(index + letter.length)}</>;
   }
   function renderRoomMessage(message: string) {
     const blocked = message.startsWith("[BLOCK]");
@@ -1389,6 +1415,14 @@ export default function Home() {
             >
               <Icon name="link" />
             </button>
+            <button
+              className="icon-button fullscreen-button"
+              aria-label="Pantalla completa"
+              title="Pantalla completa"
+              onClick={() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()}
+            >
+              <span className="fullscreen-glyph" aria-hidden="true">⛶</span>
+            </button>
           </header>
           <section className="waiting-card">
             <p className="eyebrow">SALA PREPARADA</p>
@@ -1493,6 +1527,14 @@ export default function Home() {
               }
             >
               <Icon name="link" />
+            </button>
+            <button
+              className="icon-button fullscreen-button"
+              aria-label="Pantalla completa"
+              title="Pantalla completa"
+              onClick={() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()}
+            >
+              <span className="fullscreen-glyph" aria-hidden="true">⛶</span>
             </button>
           </div>
         </header>
@@ -1657,6 +1699,10 @@ export default function Home() {
               <div
                 ref={dropRef}
                 className={`drop-zone ${dragging ? "drag-ready" : ""} ${room.pileSettledAt && now - room.pileSettledAt < 650 ? "pile-settling" : ""}`}
+                onClick={() => {
+                  const card = hand.find((item) => item.id === selected);
+                  if (card) playSelectedCard(card);
+                }}
               >
                 <span className="drop-instruction">
                   {dragging ? "Suelta la carta" : "Arrastra aquí"}
@@ -1797,7 +1843,10 @@ export default function Home() {
             <p>
               <b>{voteOwner?.name}</b> respondió
             </p>
-            <h2>“{room.pendingVote.answer}”</h2>
+            <div className="vote-word">
+              <span>{room.pendingVote.matchMode === "contains" ? "CONTIENE" : "LETRA"} {room.pendingVote.cardLabel ?? room.lastPlay?.label}</span>
+              <h2>“{highlightedAnswer(room.pendingVote.answer, room.pendingVote.cardLabel ?? room.lastPlay?.label)}”</h2>
+            </div>
             {room.pendingVote.playerId === playerId ? (
               <small>Los demás jugadores están votando…</small>
             ) : room.pendingVote.votes[playerId] === undefined ? (
@@ -1881,6 +1930,11 @@ export default function Home() {
                     : "Escribe tu respuesta…"
                 }
               />
+              {!["joker"].includes(hand.find((card) => card.id === selected)?.kind ?? "") && ["Ñ", "Y", "Q", "Z"].includes(hand.find((card) => card.id === selected)?.label ?? "") && (
+                <button type="button" className={`contains-toggle ${matchMode === "contains" ? "active" : ""}`} onClick={() => setMatchMode(matchMode === "contains" ? "starts" : "contains")}>
+                  Contiene
+                </button>
+              )}
               <button type="submit">Enviar</button>
             </form>
           )}
@@ -1888,11 +1942,13 @@ export default function Home() {
           <div className={`hand-toolbar ${me ? "" : "table-view"}`}>
             <strong>{me ? `${hand.length} cartas` : "Pantalla de mesa"}</strong>
             {me && (
+              <>
               <label>
                 <span>Ordenar</span>
                 <select
                   value={sortMode}
                   onChange={(event) => {
+                    setRandomOrder(null);
                     const value = event.target.value as
                         | "az"
                         | "za"
@@ -1909,6 +1965,13 @@ export default function Home() {
                   <option value="special-last">Especiales al final</option>
                 </select>
               </label>
+              <button className="hand-tool-button" title="Mezclar cartas" aria-label="Mezclar cartas" onClick={() => setRandomOrder(Object.fromEntries(hand.map((card) => [card.id, Math.random()])))}>
+                <Icon name="shuffle" size={15} />
+              </button>
+              <button className="hand-tool-button discard-tool" title="Desechar la carta seleccionada y recibir dos" disabled={!selected || !canPlay || room.settings.mode !== "classic"} onClick={() => { if (selected) { void act("discardCard", { cardId: selected }); setSelected(null); } }}>
+                Desechar +2
+              </button>
+              </>
             )}
           </div>
           <div
@@ -2163,6 +2226,9 @@ export default function Home() {
             </div>
           </div>
         )}
+        {turnNotice && (
+          <button className="turn-notice" onClick={() => setTurnNotice(false)} aria-live="assertive">¡Te toca!</button>
+        )}
         {exitDialog()}
         {toast && <div className="toast">{toast}</div>}
       </main>
@@ -2209,6 +2275,9 @@ export default function Home() {
             <div className="primary-actions">
               <button className="primary" onClick={() => setScreen("create")}>
                 Crear sala <Icon name="arrow_forward" size={18} />
+              </button>
+              <button className="secondary" onClick={() => setScreen("join")}>
+                Ver salas activas
               </button>
             </div>
             <button className="editor-link" onClick={() => setScreen("editor")}>
@@ -2290,7 +2359,7 @@ export default function Home() {
                   disabled={categorySaving}
                   onClick={saveGlobalCategories}
                 >
-                  {categorySaving ? "Guardando…" : "Guardar cambios"}
+                  <span className="save-category-label">{categorySaving ? "Guardando…" : "Guardar cambios"}</span>
                 </button>
               </div>
             )}
