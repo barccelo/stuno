@@ -84,6 +84,8 @@
   min-width: 190px;
   max-width: calc(100vw - 40px);
   transform: translate(-50%, -50%);
+  opacity: 1;
+  visibility: visible;
   border: 1px solid rgba(255,255,255,.55);
   border-radius: 18px;
   background: rgba(255,255,255,.90);
@@ -94,7 +96,6 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   pointer-events: auto;
-  animation: turnNoticeCard 1.55s ease both;
 }
 .turn-notice-fallback strong {
   display: block;
@@ -114,6 +115,21 @@
   border-radius: 0 0 999px 999px;
   background: var(--gold, #f4bd3b);
   transform: translateX(-50%);
+}
+
+/* Motion is purely decorative. The notice is fully visible by default so
+   Android's "Remove animations" / reduced-motion setting cannot hide it. */
+@media (prefers-reduced-motion: no-preference) {
+  .turn-notice-fallback {
+    animation: turnNoticeCard 1.55s ease both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-notice-fallback {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: translate(-50%, -50%) !important;
+  }
 }
 @keyframes turnNoticeCard {
   0% { opacity: 0; transform: translate(-50%, -44%) scale(.92); }
