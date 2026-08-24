@@ -15,7 +15,13 @@ export type Player = {
   hand: GameCard[];
   wins: number;
 };
-export type Submission = { playerId: string; cardId: string; answer: string };
+export type Submission = {
+  playerId: string;
+  cardId: string;
+  answer: string;
+  cardLabel?: string;
+  matchMode?: "starts" | "contains";
+};
 export type PendingVote = Submission & { votes: Record<string, boolean> };
 export type PendingLive = Submission & { expiresAt: number; passes?: string[] };
 export type LastPlay = {
