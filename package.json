@@ -6,7 +6,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "predev": "node scripts/apply-source-fixes.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/apply-source-fixes.mjs",
     "build": "vinext build",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy --keep-vars",
