@@ -23,3 +23,7 @@ npm run deploy
 Las tablas se inicializan de forma segura en la primera solicitud. Las migraciones SQL se conservan en `drizzle/` para futuras actualizaciones del esquema.
 
 El secreto `CATEGORY_ADMIN_KEY` debe configurarse en Cloudflare y no debe guardarse en GitHub.
+
+## Publicación
+
+La rama `main` es la fuente de producción desplegada en Cloudflare.
