@@ -102,6 +102,7 @@ export type GameState = {
   message: string;
   winnerId: string | null;
   pausedAt: number | null;
+  pausedForMissingPlayers?: boolean;
   startCountdownEndsAt?: number | null;
 };
 
