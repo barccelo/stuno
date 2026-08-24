@@ -70,7 +70,11 @@ function matchesLetter(answer: string, card: GameCard, mode: unknown) {
 }
 function drawWithEvent(state: GameState, target: Player, count = 1) {
   draw(state, target, count);
-  const event = { playerId: target.id, count, at: Date.now() };
+  const event = {
+    playerId: target.id,
+    count,
+    at: Math.max(Date.now(), (state.lastDraw?.at ?? 0) + 1),
+  };
   state.lastDraw = event;
   state.drawEvents = [event];
 }
@@ -115,7 +119,7 @@ function applyAccepted(state: GameState, submission: Submission) {
           amount: card.penalty,
           at: Date.now(),
         };
-        state.message = `${target.name} recibe +${card.penalty} automáticamente.`;
+        state.message = `${target.name} recibe +${card.penalty}.`;
       }
       if (finishAfter) declareWinner(state, owner);
       return false;
@@ -418,7 +422,11 @@ export async function POST(request: Request) {
             );
             if (currentIndex >= 0) state.turnIndex = currentIndex;
           }
-          state.message = `${departed.player.name} volvió a la partida con su mano.`;
+          const wasWaitingForPlayer = Boolean(state.pausedForMissingPlayers);
+          state.pausedForMissingPlayers = false;
+          state.message = wasWaitingForPlayer
+            ? `${departed.player.name} volvió a la partida. El anfitrión puede reanudarla.`
+            : `${departed.player.name} volvió a la partida con su mano.`;
           await save(state);
           return Response.json({
             code: roomCode,
@@ -487,8 +495,14 @@ export async function POST(request: Request) {
       if (state.players.length) {
         if (leavingIndex < state.turnIndex) state.turnIndex--;
         state.turnIndex = Math.min(state.turnIndex, state.players.length - 1);
-        state.turnStartedAt = Date.now();
-        state.message = `${leaving.name} salió de la sala. Turno de ${state.players[state.turnIndex].name}.`;
+        if (state.status === "playing" && state.players.length < 2) {
+          state.pausedAt ??= Date.now();
+          state.pausedForMissingPlayers = true;
+          state.message = `${leaving.name} salió de la sala. La partida queda en pausa hasta que vuelva.`;
+        } else {
+          state.turnStartedAt = Date.now();
+          state.message = `${leaving.name} salió de la sala. Turno de ${state.players[state.turnIndex].name}.`;
+        }
       } else {
         state.status = "closed";
         state.message = "La sala quedó vacía.";
@@ -566,9 +580,15 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       if (state.pausedAt) {
+        if (state.players.length < 2)
+          return Response.json(
+            { error: "Se necesitan al menos dos jugadores para reanudar" },
+            { status: 409 },
+          );
         if (state.turnStartedAt)
           state.turnStartedAt += Date.now() - state.pausedAt;
         state.pausedAt = null;
+        state.pausedForMissingPlayers = false;
         state.message = "La partida continúa.";
       } else {
         state.pausedAt = Date.now();
@@ -659,6 +679,7 @@ export async function POST(request: Request) {
       state.status = "playing";
       const startedAt = Date.now();
       state.pausedAt = startedAt;
+      state.pausedForMissingPlayers = false;
       state.startCountdownEndsAt =
         startedAt + (state.settings.startDelaySeconds || 5) * 1000;
       if (state.selectedCategory) {

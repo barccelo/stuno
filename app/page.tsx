@@ -586,17 +586,18 @@ export default function Home() {
     const timer = window.setTimeout(() => setIncomingCards(0), 1200);
     return () => window.clearTimeout(timer);
   }, [myLatestDraw?.at, playerId]);
-  const previousTurnId = useRef<string | undefined>(undefined);
+  const lastTurnNoticeToken = useRef("");
   useEffect(() => {
     const turnId = room?.players[room.turnIndex]?.id;
-    if (room?.status === "playing" && !room.pausedAt && turnId === playerId && previousTurnId.current !== playerId) {
-      setTurnNotice(true);
-      const timer = window.setTimeout(() => setTurnNotice(false), 1600);
-      previousTurnId.current = turnId;
-      return () => window.clearTimeout(timer);
-    }
-    previousTurnId.current = turnId;
-  }, [room?.turnIndex, room?.status, room?.pausedAt, playerId]);
+    if (room?.status !== "playing" || room.pausedAt || turnId !== playerId)
+      return;
+    const token = `${turnId}:${room.turnStartedAt}`;
+    if (lastTurnNoticeToken.current === token) return;
+    lastTurnNoticeToken.current = token;
+    setTurnNotice(true);
+    const timer = window.setTimeout(() => setTurnNotice(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [room?.turnIndex, room?.turnStartedAt, room?.status, room?.pausedAt, playerId]);
   useEffect(() => {
     setPenaltyAllocations({});
   }, [
@@ -701,7 +702,7 @@ export default function Home() {
     }
     if (
       target.closest(
-        ".play-card,.answer-bar,.action-picker,.vote-panel,.live-challenge,.pass-draw,.icon-button",
+        ".play-card,.answer-bar,.action-picker,.vote-panel,.live-challenge,.pass-draw,.icon-button,.hand-toolbar,.hand-tool-button",
       )
     )
       return;
@@ -1103,6 +1104,11 @@ export default function Home() {
     history.replaceState(null, "", `${location.pathname}?join=1&room=${code}`);
     window.setTimeout(() => codeInputRef.current?.focus(), 0);
   }
+  function openParticipantPortal() {
+    setParticipantPortal(true);
+    setScreen("join");
+    history.replaceState(null, "", `${location.pathname}?join=1`);
+  }
   function roomList(compact = false) {
     return (
       <section className={`open-rooms ${compact ? "compact" : ""}`}>
@@ -1427,14 +1433,6 @@ export default function Home() {
             >
               <Icon name="link" />
             </button>
-            <button
-              className="icon-button fullscreen-button"
-              aria-label="Pantalla completa"
-              title="Pantalla completa"
-              onClick={() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()}
-            >
-              <span className="fullscreen-glyph" aria-hidden="true">⛶</span>
-            </button>
           </header>
           <section className="waiting-card">
             <p className="eyebrow">SALA PREPARADA</p>
@@ -1539,14 +1537,6 @@ export default function Home() {
               }
             >
               <Icon name="link" />
-            </button>
-            <button
-              className="icon-button fullscreen-button"
-              aria-label="Pantalla completa"
-              title="Pantalla completa"
-              onClick={() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()}
-            >
-              <span className="fullscreen-glyph" aria-hidden="true">⛶</span>
             </button>
           </div>
         </header>
@@ -1855,9 +1845,18 @@ export default function Home() {
             <p>
               <b>{voteOwner?.name}</b> respondió
             </p>
-            <div className="vote-word">
-              <span>{room.pendingVote.matchMode === "contains" ? "CONTIENE" : "LETRA"} {room.pendingVote.cardLabel ?? room.lastPlay?.label}</span>
-              <h2>“{highlightedAnswer(room.pendingVote.answer, room.pendingVote.cardLabel ?? room.lastPlay?.label)}”</h2>
+            <div className={`vote-word ${room.pendingVote.matchMode === "contains" ? "contains" : "starts"}`}>
+              <span
+                className="vote-letter"
+                title={room.pendingVote.matchMode === "contains" ? "La respuesta contiene esta letra" : "La respuesta comienza con esta letra"}
+              >
+                {room.pendingVote.cardLabel ?? room.lastPlay?.label}
+              </span>
+              <h2>
+                “{room.pendingVote.matchMode === "contains"
+                  ? highlightedAnswer(room.pendingVote.answer, room.pendingVote.cardLabel ?? room.lastPlay?.label)
+                  : room.pendingVote.answer}”
+              </h2>
             </div>
             {room.pendingVote.playerId === playerId ? (
               <small>Los demás jugadores están votando…</small>
@@ -1980,7 +1979,22 @@ export default function Home() {
               <button className="hand-tool-button" title="Mezclar cartas" aria-label="Mezclar cartas" onClick={() => setRandomOrder(Object.fromEntries(hand.map((card) => [card.id, Math.random()])))}>
                 <Icon name="shuffle" size={15} />
               </button>
-              <button className="hand-tool-button discard-tool" title="Desechar la carta seleccionada y recibir dos" disabled={!selected || !canPlay || room.settings.mode !== "classic"} onClick={() => { if (selected) { void act("discardCard", { cardId: selected }); setSelected(null); } }}>
+              <button
+                type="button"
+                className="hand-tool-button discard-tool"
+                title={canPlay ? "Desechar cualquier carta seleccionada, recibir dos y perder el turno" : "Disponible durante tu turno"}
+                aria-label="Desechar la carta seleccionada, recibir dos y perder el turno"
+                disabled={!selected || !canPlay || room.settings.mode !== "classic"}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => {
+                  const card = hand.find((item) => item.id === selected);
+                  if (!card) return;
+                  animatePlay(card, () => {
+                    void act("discardCard", { cardId: card.id });
+                    clearCardSelection();
+                  });
+                }}
+              >
                 Desechar +2
               </button>
               </>
@@ -2241,6 +2255,14 @@ export default function Home() {
         {turnNotice && (
           <button className="turn-notice" onClick={() => setTurnNotice(false)} aria-live="assertive">¡Te toca!</button>
         )}
+        <button
+          className="icon-button game-fullscreen-fab"
+          aria-label="Pantalla completa"
+          title="Pantalla completa"
+          onClick={() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()}
+        >
+          <span className="fullscreen-glyph" aria-hidden="true">⛶</span>
+        </button>
         {exitDialog()}
         {toast && <div className="toast">{toast}</div>}
       </main>
@@ -2288,7 +2310,7 @@ export default function Home() {
               <button className="primary" onClick={() => setScreen("create")}>
                 Crear sala <Icon name="arrow_forward" size={18} />
               </button>
-              <button className="secondary" onClick={() => setScreen("join")}>
+              <button className="secondary" onClick={openParticipantPortal}>
                 Ver salas activas
               </button>
             </div>
