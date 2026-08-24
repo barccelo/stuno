@@ -1,73 +1,145 @@
-/* Targeted UI fixes: drag preview, vote alignment and turn notice fallback. */
+/* Targeted UI fixes: dragged action card, vote alignment and turn notice. */
 
-/* Keep BLOQUEAR TURNO entirely inside the dragged card. */
-.drag-ghost.stop {
+/* BLOQUEAR TURNO: while dragging, use the block symbol instead of the long text.
+   cardClass() maps stop cards to "coral", so the dragged preview does not carry
+   a separate .stop class. */
+.drag-ghost.coral {
   overflow: hidden !important;
-  padding: 8px 6px !important;
-}
-.drag-ghost.stop > strong {
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 0 !important;
   padding: 0 !important;
-  white-space: normal !important;
-  overflow-wrap: normal !important;
-  word-break: keep-all !important;
-  text-align: center !important;
-  font: 900 15px/1.05 Arial, sans-serif !important;
-  letter-spacing: 0 !important;
+}
+.drag-ghost.coral > strong {
+  display: none !important;
+}
+.drag-ghost.coral::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  border: 5px solid rgba(255,255,255,.96);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.drag-ghost.coral::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.96);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
-/* Keep the played letter on the left, while centering the submitted word
-   against the whole validation card rather than the remaining column. */
-.vote-word {
+/* Voting card: symmetric side columns keep the submitted word centered against
+   the entire card for every letter and for both the sender and the voters. */
+.vote-panel .vote-word {
   position: relative !important;
-  display: flex !important;
+  display: grid !important;
+  grid-template-columns: 64px minmax(0, 1fr) 64px !important;
+  gap: 14px !important;
   align-items: center !important;
-  justify-content: center !important;
+  width: 100% !important;
   min-height: 64px !important;
-  padding: 0 76px !important;
+  margin-bottom: 16px !important;
+  padding: 0 !important;
   text-align: center !important;
 }
-.vote-word .vote-letter {
-  position: absolute !important;
-  left: 0 !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
+.vote-panel .vote-word .vote-letter {
+  position: static !important;
+  grid-column: 1 !important;
+  width: 64px !important;
+  height: 64px !important;
+  transform: none !important;
+  margin: 0 !important;
 }
-.vote-word h2 {
+.vote-panel .vote-word h2 {
+  grid-column: 2 !important;
   width: 100% !important;
   min-width: 0 !important;
   margin: 0 !important;
   text-align: center !important;
+  justify-self: center !important;
+}
+.vote-panel .vote-word::after {
+  content: "";
+  grid-column: 3;
+  width: 64px;
+  height: 1px;
 }
 
+/* The original .turn-notice is deliberately hidden. The reliable watcher below
+   owns the brief turn card, avoiding two competing notices. */
+.turn-notice {
+  display: none !important;
+}
 .turn-notice-fallback {
   position: fixed;
   left: 50%;
-  top: 44%;
+  top: 43%;
   z-index: 1000;
+  min-width: 190px;
+  max-width: calc(100vw - 40px);
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(255,255,255,.28);
-  border-radius: 999px;
-  background: var(--gold, #f4bd3b);
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 18px;
+  background: rgba(255,255,255,.90);
   color: var(--ink, #14213d);
-  padding: 14px 25px;
-  font-size: 18px;
-  font-weight: 950;
-  box-shadow: 0 18px 45px rgba(0,0,0,.38);
-  animation: turnNoticeFallback 1.6s ease both;
+  padding: 20px 28px;
+  text-align: center;
+  box-shadow: 0 22px 60px rgba(0,0,0,.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+  animation: turnNoticeCard 1.55s ease both;
 }
-@keyframes turnNoticeFallback {
-  0% { opacity: 0; transform: translate(-50%, -42%) scale(.85); }
-  12%, 78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -55%) scale(.96); }
+.turn-notice-fallback strong {
+  display: block;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: -.02em;
+}
+.turn-notice-fallback::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 56px;
+  height: 4px;
+  border-radius: 0 0 999px 999px;
+  background: var(--gold, #f4bd3b);
+  transform: translateX(-50%);
+}
+@keyframes turnNoticeCard {
+  0% { opacity: 0; transform: translate(-50%, -44%) scale(.92); }
+  12%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -54%) scale(.97); }
 }
 
 @media (max-width: 520px) {
-  .vote-word {
+  .vote-panel .vote-word {
+    grid-template-columns: 54px minmax(0, 1fr) 54px !important;
+    gap: 10px !important;
     min-height: 54px !important;
-    padding: 0 64px !important;
+  }
+  .vote-panel .vote-word .vote-letter {
+    width: 54px !important;
+    height: 54px !important;
+  }
+  .vote-panel .vote-word::after {
+    width: 54px;
+  }
+  .turn-notice-fallback {
+    min-width: 176px;
+    padding: 18px 24px;
+  }
+  .turn-notice-fallback strong {
+    font-size: 21px;
   }
 }
 
