@@ -118,9 +118,113 @@
   transform: translateX(-50%);
 }
 
-/* Motion is decorative. When the OS removes animation, keep the visual feedback
-   on screen for the same React-controlled lifetime instead of collapsing it to
-   an invisible final keyframe. */
+/* SWAP is represented as a real exchange: the local hand travels to the pile,
+   pauses there as a compact stack, then the received cards return to the hand. */
+.swap-animation-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  overflow: hidden;
+  pointer-events: none;
+}
+.swap-motion-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 3px solid rgba(255,255,255,.86);
+  border-radius: 12px;
+  background: linear-gradient(145deg,#2455d6,#173b9a);
+  color: #fff;
+  box-shadow: 0 18px 44px rgba(0,0,0,.46);
+  will-change: transform, opacity;
+}
+.swap-motion-card > span {
+  display: block;
+  max-width: 82%;
+  max-height: 70%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  font: 850 clamp(12px,2.4vw,24px)/1.05 Arial,sans-serif;
+  letter-spacing: -.02em;
+}
+.swap-motion-card.outgoing {
+  animation: swapCardOut .48s cubic-bezier(.18,.8,.22,1) var(--swap-delay) both;
+}
+.swap-motion-card.incoming {
+  opacity: 0;
+  animation: swapCardIn .52s cubic-bezier(.18,.82,.22,1) calc(430ms + var(--swap-delay)) both;
+}
+.swap-animation-mark {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  transform: translate(-50%,-50%);
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 50%;
+  background: rgba(8,17,35,.88);
+  color: var(--gold,#f4bd3b);
+  box-shadow: 0 12px 32px rgba(0,0,0,.38);
+  font-size: 30px;
+  font-weight: 950;
+  opacity: 0;
+  animation: swapMark .82s ease 260ms both;
+}
+@keyframes swapCardOut {
+  0% {
+    opacity: 1;
+    transform: translate(var(--swap-left),var(--swap-top)) rotate(var(--swap-rotation)) scale(1);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(var(--swap-target-left),var(--swap-target-top)) rotate(var(--swap-target-rotation)) scale(.78);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--swap-target-left),var(--swap-target-top)) rotate(var(--swap-target-rotation)) scale(.72);
+  }
+}
+@keyframes swapCardIn {
+  0% {
+    opacity: 0;
+    transform: translate(var(--swap-left),var(--swap-top)) rotate(var(--swap-rotation)) scale(.7);
+  }
+  16% { opacity: 1; }
+  100% {
+    opacity: 1;
+    transform: translate(var(--swap-target-left),var(--swap-target-top)) rotate(var(--swap-target-rotation)) scale(1);
+  }
+}
+@keyframes swapMark {
+  0%,100% { opacity: 0; transform: translate(-50%,-50%) scale(.72); }
+  28%,72% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+
+/* During a full-hand exchange the hand is intentionally empty for a brief beat.
+   The server swap remains atomic; this is only the visual transition. */
+html.swap-whole-animating .card-fan .play-card {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+html.swap-whole-animating .hand-toolbar > strong {
+  font-size: 0 !important;
+}
+html.swap-whole-animating .hand-toolbar > strong::after {
+  content: "0 cartas";
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+/* Reduced-motion on Android should not erase gameplay feedback. Decorative
+   motion stays reduced, while functional card movement still runs briefly. */
 @media (prefers-reduced-motion: no-preference) {
   .turn-notice-fallback {
     animation: turnNoticeCard 1.55s ease both;
@@ -133,20 +237,47 @@
     transform: translate(-50%, -50%) !important;
   }
   .card-flight {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: translate(-50%, -50%) scale(.82) !important;
+    animation-name: sendCard !important;
+    animation-duration: .24s !important;
+    animation-timing-function: ease-out !important;
+    animation-fill-mode: both !important;
   }
   .incoming-card {
-    animation: none !important;
-    opacity: 1 !important;
-    top: 68% !important;
-    transform: translate(calc(-50% + var(--draw-offset)), -50%) rotate(var(--draw-tilt)) scale(.9) !important;
+    animation-name: receiveCard !important;
+    animation-duration: .56s !important;
+    animation-timing-function: ease-out !important;
+    animation-delay: var(--draw-delay) !important;
+    animation-fill-mode: both !important;
   }
-  .last-play,
+  .last-play {
+    animation-name: lastPlayCentered !important;
+    animation-duration: .18s !important;
+    animation-timing-function: ease-out !important;
+    animation-fill-mode: both !important;
+  }
   .center-pile-card {
-    animation: none !important;
-    opacity: 1 !important;
+    transition-duration: .2s !important;
+  }
+  .swap-motion-card.outgoing {
+    animation-name: swapCardOut !important;
+    animation-duration: .36s !important;
+    animation-timing-function: ease-out !important;
+    animation-delay: var(--swap-delay) !important;
+    animation-fill-mode: both !important;
+  }
+  .swap-motion-card.incoming {
+    animation-name: swapCardIn !important;
+    animation-duration: .38s !important;
+    animation-timing-function: ease-out !important;
+    animation-delay: calc(300ms + var(--swap-delay)) !important;
+    animation-fill-mode: both !important;
+  }
+  .swap-animation-mark {
+    animation-name: swapMark !important;
+    animation-duration: .58s !important;
+    animation-delay: 180ms !important;
+    animation-timing-function: ease !important;
+    animation-fill-mode: both !important;
   }
 }
 @keyframes turnNoticeCard {
@@ -174,5 +305,10 @@
   }
   .turn-notice-fallback strong {
     font-size: 19px;
+  }
+  .swap-animation-mark {
+    width: 46px;
+    height: 46px;
+    font-size: 25px;
   }
 }
