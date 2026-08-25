@@ -19,8 +19,12 @@ function keyOf(card: CategoryCard) {
     .join("\u0000");
 }
 
+function optionsOf(card: CategoryCard) {
+  return [card.easy, card.medium, card.expert].filter((text) => text.trim());
+}
+
 function labelOf(card: CategoryCard) {
-  return `${card.easy} · ${card.medium} · ${card.expert}`;
+  return [card.title ?? "", ...optionsOf(card)].join(" · ");
 }
 
 export default function CategorySetPicker({
@@ -45,7 +49,7 @@ export default function CategorySetPicker({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);
-  const [quick, setQuick] = useState({ easy: "", medium: "", expert: "" });
+  const [quick, setQuick] = useState({ title: "", easy: "", medium: "", expert: "" });
   const [quickNormal, setQuickNormal] = useState(false);
 
   const loadCatalog = async () => {
@@ -82,7 +86,7 @@ export default function CategorySetPicker({
     onNormalCatalog(
       catalog
         .filter((card) => card.normalEnabled !== false)
-        .map(({ easy, medium, expert }) => ({ easy, medium, expert })),
+        .map(({ title, easy, medium, expert }) => ({ title, easy, medium, expert })),
     );
   }, [catalog, catalogLoaded]);
 
@@ -217,8 +221,8 @@ export default function CategorySetPicker({
       setMessage("Selecciona o crea un set antes de añadir una categoría.");
       return;
     }
-    if (![quick.easy, quick.medium, quick.expert].every((text) => text.trim())) {
-      setMessage("Completa Fácil, Media y Experta.");
+    if (!quick.title.trim() || !optionsOf(quick).length) {
+      setMessage("Escribe un título y al menos una categoría.");
       return;
     }
     const key = mutationKey();
@@ -227,6 +231,7 @@ export default function CategorySetPicker({
     setMessage("");
     try {
       const category = {
+        title: quick.title.trim(),
         easy: quick.easy.trim(),
         medium: quick.medium.trim(),
         expert: quick.expert.trim(),
@@ -250,7 +255,7 @@ export default function CategorySetPicker({
       const newKey = keyOf(category);
       setSelectedKeys((current) => new Set([...current, newKey]));
       setMemberKeys((current) => new Set([...current, newKey]));
-      setQuick({ easy: "", medium: "", expert: "" });
+      setQuick({ title: "", easy: "", medium: "", expert: "" });
       setQuickNormal(false);
       setQuickOpen(false);
       setMessage("Categoría añadida, guardada y seleccionada para esta partida.");
@@ -348,10 +353,16 @@ export default function CategorySetPicker({
               {quickOpen && !manageMode && (
                 <div className="category-quick-add">
                   <strong>Agregar rápido a “{selectedSet}”</strong>
+                  <input
+                    className="category-quick-title"
+                    value={quick.title}
+                    onChange={(event) => setQuick({ ...quick, title: event.target.value })}
+                    placeholder="Título de la tarjeta"
+                  />
                   <div className="category-quick-grid">
-                    <input value={quick.easy} onChange={(event) => setQuick({ ...quick, easy: event.target.value })} placeholder="Fácil" />
-                    <input value={quick.medium} onChange={(event) => setQuick({ ...quick, medium: event.target.value })} placeholder="Media" />
-                    <input value={quick.expert} onChange={(event) => setQuick({ ...quick, expert: event.target.value })} placeholder="Experta" />
+                    <input value={quick.easy} onChange={(event) => setQuick({ ...quick, easy: event.target.value })} placeholder="Fácil (opcional)" />
+                    <input value={quick.medium} onChange={(event) => setQuick({ ...quick, medium: event.target.value })} placeholder="Media (opcional)" />
+                    <input value={quick.expert} onChange={(event) => setQuick({ ...quick, expert: event.target.value })} placeholder="Experta (opcional)" />
                   </div>
                   <label className="category-set-switch">
                     <input
@@ -398,6 +409,7 @@ export default function CategorySetPicker({
                 {visible.length ? visible.map((card) => {
                   const key = keyOf(card);
                   const checked = manageMode ? memberKeys.has(key) : selectedKeys.has(key);
+                  const options = optionsOf(card);
                   return (
                     <label className="category-set-item" key={key}>
                       <input
@@ -414,8 +426,8 @@ export default function CategorySetPicker({
                         }}
                       />
                       <span>
-                        <b>{card.easy}</b>
-                        <small>{card.medium} · {card.expert}</small>
+                        <b>{card.title?.trim() || options[0] || "Sin título"}</b>
+                        <small>{options.join(" · ")}</small>
                         <small>{card.normalEnabled === false ? "Solo sets" : "Juego normal + sets"}</small>
                       </span>
                     </label>
