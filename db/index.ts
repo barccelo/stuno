@@ -25,6 +25,7 @@ export async function ensureSchema() {
       easy TEXT NOT NULL,
       medium TEXT NOT NULL,
       expert TEXT NOT NULL,
+      normal_enabled INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL,
       updated_at TEXT NOT NULL
     )`),
@@ -37,6 +38,18 @@ export async function ensureSchema() {
     d1.prepare(`CREATE INDEX IF NOT EXISTS category_set_name_idx
       ON category_set_memberships (set_name)`),
   ]);
+
+  const info = await d1.prepare("PRAGMA table_info(category_cards)").all();
+  const columns = (info.results ?? []) as { name?: string }[];
+  if (!columns.some((column) => column.name === "normal_enabled")) {
+    try {
+      await d1
+        .prepare("ALTER TABLE category_cards ADD COLUMN normal_enabled INTEGER NOT NULL DEFAULT 1")
+        .run();
+    } catch (error) {
+      if (!String(error).toLocaleLowerCase().includes("duplicate column")) throw error;
+    }
+  }
 }
 
 export function getDb() {
