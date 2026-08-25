@@ -110,11 +110,12 @@ export function categories(custom?: CategoryCard[]) {
   return custom && custom.length ? custom : DEFAULT_CATEGORY_CARDS;
 }
 
-export function makeDeck(): GameCard[] {
+export function makeDeck(idPrefix = ""): GameCard[] {
   const cards: GameCard[] = [];
   let n = 0;
+  const prefix = idPrefix ? `${idPrefix}-` : "";
   const add = (label: string, kind: CardKind = "letter", penalty?: number) =>
-    cards.push({ id: `c${n++}`, label, kind, penalty });
+    cards.push({ id: `${prefix}c${n++}`, label, kind, penalty });
   "A A A A E E E E I I I O O O U U U B B C C C D D L L L M M M N N N P P P R R R R S S S S T"
     .split(" ")
     .forEach((letter) => add(letter));
@@ -138,13 +139,22 @@ export function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 export function draw(state: GameState, player: Player, count = 1) {
+  let drawn = 0;
   for (let i = 0; i < count; i++) {
-    if (!state.deck.length) {
+    if (!state.deck.length && state.discard.length) {
       state.deck = shuffle(state.discard.splice(0));
     }
+    if (!state.deck.length) {
+      const refillId = `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      state.deck = makeDeck(refillId);
+    }
     const card = state.deck.pop();
-    if (card) player.hand.push(card);
+    if (card) {
+      player.hand.push(card);
+      drawn++;
+    }
   }
+  return drawn;
 }
 export function nextIndex(state: GameState, extra = 1) {
   const length = state.players.length;
