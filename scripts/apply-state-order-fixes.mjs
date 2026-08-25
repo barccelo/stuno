@@ -44,6 +44,11 @@ await patchFile("app/api/rooms/route.ts", [
     from: '      const state: GameState = {\n        code: roomCode,\n        hostId: playerId,',
     to: '      const state: GameState = {\n        code: roomCode,\n        revision: 1,\n        hostId: playerId,',
   },
+  {
+    label: "evitar escrituras de heartbeat durante una partida activa",
+    from: '  if (\n    playerId === state.hostId &&\n    (!state.hostLastSeenAt || Date.now() - state.hostLastSeenAt > 10000)\n  ) {',
+    to: '  if (\n    state.status === "lobby" &&\n    playerId === state.hostId &&\n    (!state.hostLastSeenAt || Date.now() - state.hostLastSeenAt > 10000)\n  ) {',
+  },
 ]);
 
 await patchFile("app/page.tsx", [
