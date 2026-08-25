@@ -3,9 +3,12 @@ import { readFile, writeFile } from "node:fs/promises";
 async function patchFile(path, replacements) {
   let source = await readFile(path, "utf8");
   let changed = false;
-  for (const { from, to, label } of replacements) {
+  for (const { from, to, label, optional = false } of replacements) {
     if (source.includes(to)) continue;
-    if (!source.includes(from)) throw new Error(`No se encontró el bloque esperado para: ${label}`);
+    if (!source.includes(from)) {
+      if (optional) continue;
+      throw new Error(`No se encontró el bloque esperado para: ${label}`);
+    }
     source = source.replace(from, to);
     changed = true;
   }
@@ -24,7 +27,7 @@ await patchFile("app/api/rooms/route.ts", [
   {
     label: "importar operadores para señales de voz",
     from: 'import { desc, eq } from "drizzle-orm";',
-    to: 'import { and, desc, eq, gt } from "drizzle-orm";',
+    to: 'import { and, desc, eq, gt, ne, or } from "drizzle-orm";',
   },
   {
     label: "importar tabla de señales de voz",
@@ -32,9 +35,9 @@ await patchFile("app/api/rooms/route.ts", [
     to: 'import { rooms, voiceSignals } from "../../../db/schema";',
   },
   {
-    label: "exponer sólo señales recientes destinadas al jugador",
+    label: "exponer sólo señales nuevas destinadas al jugador",
     from: '  if (changed) await save(state);\n  return Response.json({ state: publicState(state, playerId) });\n}',
-    to: '  if (changed) await save(state);\n  const responseState = publicState(state, playerId) as ReturnType<typeof publicState> & {\n    voiceSignals?: { id: string; from: string; to: string; type: "join" | "leave" | "offer" | "answer"; sdp?: string | null; at: number }[];\n  };\n  if (state.settings.allowVoiceChat && playerId && url.searchParams.get("voice") === "1") {\n    const recent = await getDb()\n      .select()\n      .from(voiceSignals)\n      .where(\n        and(\n          eq(voiceSignals.roomCode, roomCode),\n          gt(voiceSignals.createdAt, Date.now() - 45000),\n        ),\n      )\n      .orderBy(desc(voiceSignals.createdAt))\n      .limit(160);\n    responseState.voiceSignals = recent\n      .filter((signal) =>\n        signal.fromPlayerId !== playerId &&\n        (signal.toPlayerId === "*" || signal.toPlayerId === playerId),\n      )\n      .reverse()\n      .map((signal) => ({\n        id: signal.id,\n        from: signal.fromPlayerId,\n        to: signal.toPlayerId,\n        type: signal.type as "join" | "leave" | "offer" | "answer",\n        sdp: signal.sdp,\n        at: signal.createdAt,\n      }));\n  }\n  return Response.json({ state: responseState });\n}',
+    to: '  if (changed) await save(state);\n  const responseState = publicState(state, playerId) as ReturnType<typeof publicState> & {\n    voiceSignals?: { id: string; from: string; to: string; type: "join" | "leave" | "offer" | "answer" | "candidate"; sdp?: string | null; at: number }[];\n  };\n  if (state.settings.allowVoiceChat && playerId && url.searchParams.get("voice") === "1") {\n    const requestedSince = Number(url.searchParams.get("voiceSince") ?? 0);\n    const voiceSince = Math.max(\n      Number.isFinite(requestedSince) ? requestedSince : 0,\n      Date.now() - 45000,\n    );\n    const recent = await getDb()\n      .select()\n      .from(voiceSignals)\n      .where(\n        and(\n          eq(voiceSignals.roomCode, roomCode),\n          gt(voiceSignals.createdAt, voiceSince),\n          ne(voiceSignals.fromPlayerId, playerId),\n          or(\n            eq(voiceSignals.toPlayerId, "*"),\n            eq(voiceSignals.toPlayerId, playerId),\n          ),\n        ),\n      )\n      .orderBy(desc(voiceSignals.createdAt))\n      .limit(120);\n    responseState.voiceSignals = recent\n      .reverse()\n      .map((signal) => ({\n        id: signal.id,\n        from: signal.fromPlayerId,\n        to: signal.toPlayerId,\n        type: signal.type as "join" | "leave" | "offer" | "answer" | "candidate",\n        sdp: signal.sdp,\n        at: signal.createdAt,\n      }));\n  }\n  return Response.json({ state: responseState });\n}',
   },
   {
     label: "guardar preferencia de voz al crear sala",
@@ -62,12 +65,12 @@ await patchFile("app/page.tsx", [
   {
     label: "guardar opción local de voz",
     from: '  const [startDelay, setStartDelay] = useState(5);\n  const [name, setName] = useState("");',
-    to: '  const [startDelay, setStartDelay] = useState(5);\n  const [allowVoiceChat, setAllowVoiceChat] = useState(false);\n  const [voiceListening, setVoiceListening] = useState(false);\n  const [name, setName] = useState("");',
+    to: '  const [startDelay, setStartDelay] = useState(5);\n  const [allowVoiceChat, setAllowVoiceChat] = useState(false);\n  const [voiceListening, setVoiceListening] = useState(false);\n  const voiceSignalSince = useRef(0);\n  const [name, setName] = useState("");',
   },
   {
-    label: "pedir señales sólo mientras el jugador usa voz",
+    label: "pedir sólo señales de voz nuevas",
     from: '`/api/rooms?code=${room.code}&playerId=${playerId}`,',
-    to: '`/api/rooms?code=${room.code}&playerId=${playerId}&voice=${voiceListening ? "1" : "0"}`,',
+    to: '`/api/rooms?code=${room.code}&playerId=${playerId}&voice=${voiceListening ? "1" : "0"}&voiceSince=${voiceSignalSince.current}`,',
   },
   {
     label: "actualizar polling al entrar o salir de voz",
@@ -90,13 +93,25 @@ await patchFile("app/page.tsx", [
     to: '                  <p>\n                    <span>Formato</span>\n                    <b>{playStyle === "online" ? "En línea" : "En vivo"}</b>\n                  </p>\n                  <p>\n                    <span>Voz</span>\n                    <b>{allowVoiceChat ? "Permitida" : "Desactivada"}</b>\n                  </p>\n                  <CategorySetPicker',
   },
   {
-    label: "habilitar voz en sala de espera",
-    from: '          </section>\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
-    to: '          </section>\n          {room.settings.allowVoiceChat && (\n            <VoiceChat\n              roomCode={room.code}\n              playerId={playerId}\n              players={room.players}\n              signals={room.voiceSignals}\n              onActiveChange={setVoiceListening}\n            />\n          )}\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
+    label: "quitar inserción antigua de voz en espera",
+    optional: true,
+    from: '          </section>\n          {room.settings.allowVoiceChat && (\n            <VoiceChat\n              roomCode={room.code}\n              playerId={playerId}\n              players={room.players}\n              signals={room.voiceSignals}\n              onActiveChange={setVoiceListening}\n            />\n          )}\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
+    to: '          </section>\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
   },
   {
-    label: "habilitar voz durante la partida",
-    from: '        </header>\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
-    to: '        </header>\n        {room.settings.allowVoiceChat && (\n          <VoiceChat\n            roomCode={room.code}\n            playerId={playerId}\n            players={room.players}\n            signals={room.voiceSignals}\n            onActiveChange={setVoiceListening}\n          />\n        )}\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
+    label: "quitar inserción antigua de voz en partida",
+    optional: true,
+    from: '        </header>\n        {room.settings.allowVoiceChat && (\n          <VoiceChat\n            roomCode={room.code}\n            playerId={playerId}\n            players={room.players}\n            signals={room.voiceSignals}\n            onActiveChange={setVoiceListening}\n          />\n        )}\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
+    to: '        </header>\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
+  },
+  {
+    label: "mantener voz estable desde sala de espera",
+    from: '        <main className="waiting-shell">\n          <header className="game-topbar lobby-topbar">',
+    to: '        <main className="waiting-shell">\n          {room.settings.allowVoiceChat && (\n            <VoiceChat\n              key={`voice-${room.code}-${playerId}`}\n              roomCode={room.code}\n              playerId={playerId}\n              players={room.players}\n              signals={room.voiceSignals}\n              onActiveChange={setVoiceListening}\n              onSignalCursorChange={(since) => { voiceSignalSince.current = since; }}\n            />\n          )}\n          <header className="game-topbar lobby-topbar">',
+  },
+  {
+    label: "mantener voz estable durante la partida",
+    from: '      <main className="game-shell" onPointerDown={dismissSelectionFromBackground}>\n        <header className="game-topbar">',
+    to: '      <main className="game-shell" onPointerDown={dismissSelectionFromBackground}>\n        {room.settings.allowVoiceChat && (\n          <VoiceChat\n            key={`voice-${room.code}-${playerId}`}\n            roomCode={room.code}\n            playerId={playerId}\n            players={room.players}\n            signals={room.voiceSignals}\n            onActiveChange={setVoiceListening}\n            onSignalCursorChange={(since) => { voiceSignalSince.current = since; }}\n          />\n        )}\n        <header className="game-topbar">',
   },
 ]);
