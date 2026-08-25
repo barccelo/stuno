@@ -9,3 +9,10 @@ export const categoryCards = sqliteTable("category_cards", {
   sortOrder: integer("sort_order").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const categorySetMemberships = sqliteTable("category_set_memberships", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  setName: text("set_name").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
