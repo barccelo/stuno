@@ -28,6 +28,14 @@ export async function ensureSchema() {
       sort_order INTEGER NOT NULL,
       updated_at TEXT NOT NULL
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS category_set_memberships (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      set_name TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    d1.prepare(`CREATE INDEX IF NOT EXISTS category_set_name_idx
+      ON category_set_memberships (set_name)`),
   ]);
 }
 
