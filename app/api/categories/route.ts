@@ -4,7 +4,7 @@ import { ensureSchema, getDb } from "../../../db";
 import { categoryCards, categorySetMemberships } from "../../../db/schema";
 import { DEFAULT_CATEGORY_CARDS } from "../../../lib/categories";
 
-type CategoryInput = { easy: string; medium: string; expert: string };
+type CategoryInput = { title: string; easy: string; medium: string; expert: string };
 type StoredCategory = CategoryInput & { id: number; normalEnabled: boolean };
 type CatalogCategory = CategoryInput & { sets: string[]; normalEnabled: boolean };
 
@@ -20,11 +20,18 @@ function authorized(request: Request) {
   return Boolean(expected && supplied && supplied === expected);
 }
 
-function categoryFingerprint(card: CategoryInput) {
+function categoryFingerprint(card: Pick<CategoryInput, "easy" | "medium" | "expert">) {
   return [card.easy, card.medium, card.expert]
     .map((text) => text.trim().toLocaleLowerCase("es").replace(/\s+/g, " "))
     .join("\u0000");
 }
+
+const DEFAULT_TITLE_BY_FINGERPRINT = new Map(
+  DEFAULT_CATEGORY_CARDS.map((card) => [
+    categoryFingerprint(card),
+    card.title?.trim() || card.easy.trim() || card.medium.trim() || card.expert.trim() || "Categoría",
+  ] as const),
+);
 
 function cleanSetName(value: unknown) {
   if (typeof value !== "string") return "";
@@ -37,9 +44,17 @@ function cleanCategory(value: unknown): CategoryInput | null {
   const easy = typeof row.easy === "string" ? row.easy.trim() : "";
   const medium = typeof row.medium === "string" ? row.medium.trim() : "";
   const expert = typeof row.expert === "string" ? row.expert.trim() : "";
-  if (!easy || !medium || !expert || [easy, medium, expert].some((text) => text.length > 100))
+  const fallbackTitle = easy || medium || expert;
+  const title =
+    (typeof row.title === "string" ? row.title.trim() : "") || fallbackTitle;
+  if (
+    !title ||
+    !fallbackTitle ||
+    title.length > 80 ||
+    [easy, medium, expert].some((text) => text.length > 100)
+  )
     return null;
-  return { easy, medium, expert };
+  return { title, easy, medium, expert };
 }
 
 function cleanCategories(value: unknown): CategoryInput[] | null {
@@ -64,6 +79,7 @@ async function insertCategories(cards: (CategoryInput & { normalEnabled?: boolea
   for (let offset = 0; offset < cards.length; offset += INSERT_BATCH_SIZE) {
     await db.insert(categoryCards).values(
       cards.slice(offset, offset + INSERT_BATCH_SIZE).map((card, index) => ({
+        title: card.title,
         easy: card.easy,
         medium: card.medium,
         expert: card.expert,
@@ -79,16 +95,34 @@ async function readOrSeedCategories(): Promise<StoredCategory[]> {
   const db = getDb();
   let rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   if (!rows.length) {
-    await insertCategories(DEFAULT_CATEGORY_CARDS.map((card) => ({ ...card, normalEnabled: true })));
+    await insertCategories(
+      DEFAULT_CATEGORY_CARDS.map((card) => ({
+        title: card.title?.trim() || card.easy,
+        easy: card.easy,
+        medium: card.medium,
+        expert: card.expert,
+        normalEnabled: true,
+      })),
+    );
     rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   }
-  return rows.map(({ id, easy, medium, expert, normalEnabled }) => ({
-    id,
-    easy,
-    medium,
-    expert,
-    normalEnabled: normalEnabled !== 0,
-  }));
+  return rows.map(({ id, title, easy, medium, expert, normalEnabled }) => {
+    const fingerprint = categoryFingerprint({ easy, medium, expert });
+    return {
+      id,
+      title:
+        title.trim() ||
+        DEFAULT_TITLE_BY_FINGERPRINT.get(fingerprint) ||
+        easy.trim() ||
+        medium.trim() ||
+        expert.trim() ||
+        "Categoría",
+      easy,
+      medium,
+      expert,
+      normalEnabled: normalEnabled !== 0,
+    };
+  });
 }
 
 async function readCatalog() {
@@ -102,6 +136,7 @@ async function readCatalog() {
     setsByFingerprint.set(membership.fingerprint, list);
   }
   const catalog: CatalogCategory[] = categories.map((card) => ({
+    title: card.title,
     easy: card.easy,
     medium: card.medium,
     expert: card.expert,
@@ -134,7 +169,10 @@ export async function PUT(request: Request) {
   const body = (await request.json().catch(() => null)) as { categories?: unknown } | null;
   const clean = cleanCategories(body?.categories);
   if (!clean)
-    return Response.json({ error: "Revisa que cada tarjeta tenga sus tres categorías." }, { status: 400 });
+    return Response.json(
+      { error: "Cada tarjeta necesita un título y al menos una categoría." },
+      { status: 400 },
+    );
 
   const db = getDb();
   const previous = await readOrSeedCategories();
@@ -166,7 +204,10 @@ export async function POST(request: Request) {
     if (!setName)
       return Response.json({ error: "Indica el nombre del set." }, { status: 400 });
     if (!category)
-      return Response.json({ error: "Completa Fácil, Media y Experta." }, { status: 400 });
+      return Response.json(
+        { error: "Escribe un título y al menos una categoría." },
+        { status: 400 },
+      );
 
     const existing = await readOrSeedCategories();
     const fingerprint = categoryFingerprint(category);
@@ -174,7 +215,7 @@ export async function POST(request: Request) {
       await db.insert(categoryCards).values({
         ...category,
         normalEnabled: body?.normalEnabled === true ? 1 : 0,
-        sortOrder: existing.length,
+        sortOrder: -Date.now(),
         updatedAt: new Date().toISOString(),
       });
     }
