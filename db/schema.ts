@@ -17,3 +17,13 @@ export const categorySetMemberships = sqliteTable("category_set_memberships", {
   fingerprint: text("fingerprint").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const voiceSignals = sqliteTable("voice_signals", {
+  id: text("id").primaryKey(),
+  roomCode: text("room_code").notNull(),
+  fromPlayerId: text("from_player_id").notNull(),
+  toPlayerId: text("to_player_id").notNull(),
+  type: text("type").notNull(),
+  sdp: text("sdp"),
+  createdAt: integer("created_at").notNull(),
+});
