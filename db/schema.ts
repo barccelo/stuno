@@ -6,6 +6,7 @@ export const categoryCards = sqliteTable("category_cards", {
   easy: text("easy").notNull(),
   medium: text("medium").notNull(),
   expert: text("expert").notNull(),
+  normalEnabled: integer("normal_enabled").notNull().default(1),
   sortOrder: integer("sort_order").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
