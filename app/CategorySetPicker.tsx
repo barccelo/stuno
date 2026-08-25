@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CategoryCard } from "../lib/game";
 
-type CatalogCategory = CategoryCard & { sets?: string[] };
+type CatalogCategory = CategoryCard & { sets?: string[]; normalEnabled?: boolean };
 type CatalogResponse = { categories?: CatalogCategory[]; sets?: string[]; error?: string };
 
 type Props = {
   fallbackCategories: CategoryCard[];
   initialAdminKey?: string;
   onChange: (categories: CategoryCard[] | null) => void;
+  onNormalCatalog: (categories: CategoryCard[]) => void;
 };
 
 function keyOf(card: CategoryCard) {
@@ -22,11 +23,17 @@ function labelOf(card: CategoryCard) {
   return `${card.easy} · ${card.medium} · ${card.expert}`;
 }
 
-export default function CategorySetPicker({ fallbackCategories, initialAdminKey = "", onChange }: Props) {
+export default function CategorySetPicker({
+  fallbackCategories,
+  initialAdminKey = "",
+  onChange,
+  onNormalCatalog,
+}: Props) {
   const [enabled, setEnabled] = useState(false);
   const [catalog, setCatalog] = useState<CatalogCategory[]>(
-    fallbackCategories.map((card) => ({ ...card, sets: [] })),
+    fallbackCategories.map((card) => ({ ...card, sets: [], normalEnabled: true })),
   );
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [setNames, setSetNames] = useState<string[]>([]);
   const [selectedSet, setSelectedSet] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -39,6 +46,7 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
   const [message, setMessage] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);
   const [quick, setQuick] = useState({ easy: "", medium: "", expert: "" });
+  const [quickNormal, setQuickNormal] = useState(false);
 
   const loadCatalog = async () => {
     const response = await fetch("/api/categories", { cache: "no-store" });
@@ -46,11 +54,12 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
     if (!response.ok) throw new Error(data.error || "No se pudieron cargar las categorías.");
     const nextCatalog = data.categories?.length
       ? data.categories
-      : fallbackCategories.map((card) => ({ ...card, sets: [] }));
+      : fallbackCategories.map((card) => ({ ...card, sets: [], normalEnabled: true }));
     const nextSets = data.sets ?? Array.from(
       new Set(nextCatalog.flatMap((card) => card.sets ?? [])),
     ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
     setCatalog(nextCatalog);
+    setCatalogLoaded(true);
     setSetNames(nextSets);
     setSelectedSet((current) =>
       current || nextSets.find((name) => name.toLocaleLowerCase("es") === "categorías locas") || nextSets[0] || "",
@@ -67,6 +76,15 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
       }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    onNormalCatalog(
+      catalog
+        .filter((card) => card.normalEnabled !== false)
+        .map(({ easy, medium, expert }) => ({ easy, medium, expert })),
+    );
+  }, [catalog, catalogLoaded]);
 
   const setMembers = useMemo(
     () => catalog.filter((card) => (card.sets ?? []).includes(selectedSet)),
@@ -157,6 +175,43 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
     }
   }
 
+  async function setNormalVisibility(normalEnabled: boolean) {
+    if (!memberKeys.size) {
+      setMessage("Este set no tiene categorías seleccionadas.");
+      return;
+    }
+    const key = mutationKey();
+    if (!key) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/categories", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-stuno-admin-key": key,
+        },
+        body: JSON.stringify({
+          action: "setNormalVisibility",
+          categoryKeys: Array.from(memberKeys),
+          normalEnabled,
+        }),
+      });
+      const data = (await response.json()) as CatalogResponse;
+      if (!response.ok) throw new Error(data.error || "No se pudo cambiar la visibilidad.");
+      applyCatalogResponse(data);
+      setMessage(
+        normalEnabled
+          ? "Estas categorías también podrán aparecer en el juego normal."
+          : "Estas categorías quedaron disponibles únicamente mediante sets.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo cambiar la visibilidad.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function quickAdd() {
     if (!selectedSet.trim()) {
       setMessage("Selecciona o crea un set antes de añadir una categoría.");
@@ -182,7 +237,12 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
           "content-type": "application/json",
           "x-stuno-admin-key": key,
         },
-        body: JSON.stringify({ action: "quickAdd", setName: selectedSet, category }),
+        body: JSON.stringify({
+          action: "quickAdd",
+          setName: selectedSet,
+          category,
+          normalEnabled: quickNormal,
+        }),
       });
       const data = (await response.json()) as CatalogResponse;
       if (!response.ok) throw new Error(data.error || "No se pudo añadir la categoría.");
@@ -191,6 +251,7 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
       setSelectedKeys((current) => new Set([...current, newKey]));
       setMemberKeys((current) => new Set([...current, newKey]));
       setQuick({ easy: "", medium: "", expert: "" });
+      setQuickNormal(false);
       setQuickOpen(false);
       setMessage("Categoría añadida, guardada y seleccionada para esta partida.");
     } catch (error) {
@@ -292,6 +353,14 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
                     <input value={quick.medium} onChange={(event) => setQuick({ ...quick, medium: event.target.value })} placeholder="Media" />
                     <input value={quick.expert} onChange={(event) => setQuick({ ...quick, expert: event.target.value })} placeholder="Experta" />
                   </div>
+                  <label className="category-set-switch">
+                    <input
+                      type="checkbox"
+                      checked={quickNormal}
+                      onChange={(event) => setQuickNormal(event.target.checked)}
+                    />
+                    <span>{quickNormal ? "También juego normal" : "Solo este set"}</span>
+                  </label>
                   {!adminKey.trim() && (
                     <input
                       type="password"
@@ -312,6 +381,17 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
                   onChange={(event) => setAdminKey(event.target.value)}
                   placeholder="Clave administrativa para guardar el set"
                 />
+              )}
+
+              {manageMode && (
+                <div className="category-set-tools">
+                  <button type="button" disabled={saving || !memberKeys.size} onClick={() => void setNormalVisibility(false)}>
+                    Solo sets
+                  </button>
+                  <button type="button" disabled={saving || !memberKeys.size} onClick={() => void setNormalVisibility(true)}>
+                    También juego normal
+                  </button>
+                </div>
               )}
 
               <div className="category-set-list">
@@ -336,6 +416,7 @@ export default function CategorySetPicker({ fallbackCategories, initialAdminKey 
                       <span>
                         <b>{card.easy}</b>
                         <small>{card.medium} · {card.expert}</small>
+                        <small>{card.normalEnabled === false ? "Solo sets" : "Juego normal + sets"}</small>
                       </span>
                     </label>
                   );
