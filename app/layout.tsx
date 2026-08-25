@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./ui-fixes.css";
 import "./category-sets.css";
+import "./category-admin.css";
 import "./voice-chat.css";
 import TurnNoticeWatcher from "./TurnNoticeWatcher";
 
