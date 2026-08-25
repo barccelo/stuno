@@ -47,7 +47,7 @@
 
 .category-scroll-top {
   position: fixed;
-  right: max(76px, calc(env(safe-area-inset-right) + 76px));
+  right: max(12px, calc(env(safe-area-inset-right) + 12px));
   bottom: max(16px, env(safe-area-inset-bottom));
   width: 46px;
   height: 46px;
@@ -81,7 +81,7 @@
     gap: 8px;
   }
   .category-scroll-top {
-    right: 64px;
+    right: max(8px, calc(env(safe-area-inset-right) + 8px));
     bottom: 10px;
     width: 42px;
     height: 42px;
