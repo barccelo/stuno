@@ -8,7 +8,7 @@ export type GameCard = {
   kind: CardKind;
   penalty?: number;
 };
-export type CategoryCard = { easy: string; medium: string; expert: string };
+export type CategoryCard = { title?: string; easy: string; medium: string; expert: string };
 export type Player = {
   id: string;
   name: string;
