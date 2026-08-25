@@ -37,6 +37,17 @@ export async function ensureSchema() {
     )`),
     d1.prepare(`CREATE INDEX IF NOT EXISTS category_set_name_idx
       ON category_set_memberships (set_name)`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS voice_signals (
+      id TEXT PRIMARY KEY NOT NULL,
+      room_code TEXT NOT NULL,
+      from_player_id TEXT NOT NULL,
+      to_player_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      sdp TEXT,
+      created_at INTEGER NOT NULL
+    )`),
+    d1.prepare(`CREATE INDEX IF NOT EXISTS voice_signals_room_time_idx
+      ON voice_signals (room_code, created_at)`),
   ]);
 
   const info = await d1.prepare("PRAGMA table_info(category_cards)").all();
