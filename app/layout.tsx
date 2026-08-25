@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./ui-fixes.css";
+import "./category-sets.css";
 import TurnNoticeWatcher from "./TurnNoticeWatcher";
 
 export const viewport: Viewport = {
