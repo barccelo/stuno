@@ -3,6 +3,7 @@ export const rooms = sqliteTable("rooms", { code:text("code").primaryKey(), stat
 
 export const categoryCards = sqliteTable("category_cards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull().default(""),
   easy: text("easy").notNull(),
   medium: text("medium").notNull(),
   expert: text("expert").notNull(),
