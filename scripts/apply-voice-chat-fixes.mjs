@@ -34,7 +34,7 @@ await patchFile("app/api/rooms/route.ts", [
   {
     label: "exponer sólo señales recientes destinadas al jugador",
     from: '  if (changed) await save(state);\n  return Response.json({ state: publicState(state, playerId) });\n}',
-    to: '  if (changed) await save(state);\n  const responseState = publicState(state, playerId) as ReturnType<typeof publicState> & {\n    voiceSignals?: { id: string; from: string; to: string; type: "join" | "leave" | "offer" | "answer"; sdp?: string | null; at: number }[];\n  };\n  if (state.settings.allowVoiceChat && playerId) {\n    const recent = await getDb()\n      .select()\n      .from(voiceSignals)\n      .where(\n        and(\n          eq(voiceSignals.roomCode, roomCode),\n          gt(voiceSignals.createdAt, Date.now() - 45000),\n        ),\n      )\n      .orderBy(desc(voiceSignals.createdAt))\n      .limit(160);\n    responseState.voiceSignals = recent\n      .filter((signal) =>\n        signal.fromPlayerId !== playerId &&\n        (signal.toPlayerId === "*" || signal.toPlayerId === playerId),\n      )\n      .reverse()\n      .map((signal) => ({\n        id: signal.id,\n        from: signal.fromPlayerId,\n        to: signal.toPlayerId,\n        type: signal.type as "join" | "leave" | "offer" | "answer",\n        sdp: signal.sdp,\n        at: signal.createdAt,\n      }));\n  }\n  return Response.json({ state: responseState });\n}',
+    to: '  if (changed) await save(state);\n  const responseState = publicState(state, playerId) as ReturnType<typeof publicState> & {\n    voiceSignals?: { id: string; from: string; to: string; type: "join" | "leave" | "offer" | "answer"; sdp?: string | null; at: number }[];\n  };\n  if (state.settings.allowVoiceChat && playerId && url.searchParams.get("voice") === "1") {\n    const recent = await getDb()\n      .select()\n      .from(voiceSignals)\n      .where(\n        and(\n          eq(voiceSignals.roomCode, roomCode),\n          gt(voiceSignals.createdAt, Date.now() - 45000),\n        ),\n      )\n      .orderBy(desc(voiceSignals.createdAt))\n      .limit(160);\n    responseState.voiceSignals = recent\n      .filter((signal) =>\n        signal.fromPlayerId !== playerId &&\n        (signal.toPlayerId === "*" || signal.toPlayerId === playerId),\n      )\n      .reverse()\n      .map((signal) => ({\n        id: signal.id,\n        from: signal.fromPlayerId,\n        to: signal.toPlayerId,\n        type: signal.type as "join" | "leave" | "offer" | "answer",\n        sdp: signal.sdp,\n        at: signal.createdAt,\n      }));\n  }\n  return Response.json({ state: responseState });\n}',
   },
   {
     label: "guardar preferencia de voz al crear sala",
@@ -62,7 +62,17 @@ await patchFile("app/page.tsx", [
   {
     label: "guardar opción local de voz",
     from: '  const [startDelay, setStartDelay] = useState(5);\n  const [name, setName] = useState("");',
-    to: '  const [startDelay, setStartDelay] = useState(5);\n  const [allowVoiceChat, setAllowVoiceChat] = useState(false);\n  const [name, setName] = useState("");',
+    to: '  const [startDelay, setStartDelay] = useState(5);\n  const [allowVoiceChat, setAllowVoiceChat] = useState(false);\n  const [voiceListening, setVoiceListening] = useState(false);\n  const [name, setName] = useState("");',
+  },
+  {
+    label: "pedir señales sólo mientras el jugador usa voz",
+    from: '`/api/rooms?code=${room.code}&playerId=${playerId}`,',
+    to: '`/api/rooms?code=${room.code}&playerId=${playerId}&voice=${voiceListening ? "1" : "0"}`,',
+  },
+  {
+    label: "actualizar polling al entrar o salir de voz",
+    from: '  }, [screen, room?.code, playerId]);',
+    to: '  }, [screen, room?.code, playerId, voiceListening]);',
   },
   {
     label: "enviar opción de voz al servidor",
@@ -82,11 +92,11 @@ await patchFile("app/page.tsx", [
   {
     label: "habilitar voz en sala de espera",
     from: '          </section>\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
-    to: '          </section>\n          {room.settings.allowVoiceChat && (\n            <VoiceChat\n              roomCode={room.code}\n              playerId={playerId}\n              players={room.players}\n              signals={room.voiceSignals}\n            />\n          )}\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
+    to: '          </section>\n          {room.settings.allowVoiceChat && (\n            <VoiceChat\n              roomCode={room.code}\n              playerId={playerId}\n              players={room.players}\n              signals={room.voiceSignals}\n              onActiveChange={setVoiceListening}\n            />\n          )}\n          {exitDialog()}\n          {toast && <div className="toast">{toast}</div>}',
   },
   {
     label: "habilitar voz durante la partida",
     from: '        </header>\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
-    to: '        </header>\n        {room.settings.allowVoiceChat && (\n          <VoiceChat\n            roomCode={room.code}\n            playerId={playerId}\n            players={room.players}\n            signals={room.voiceSignals}\n          />\n        )}\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
+    to: '        </header>\n        {room.settings.allowVoiceChat && (\n          <VoiceChat\n            roomCode={room.code}\n            playerId={playerId}\n            players={room.players}\n            signals={room.voiceSignals}\n            onActiveChange={setVoiceListening}\n          />\n        )}\n        <section\n          className={`turn-board ${room.players.length > 4 ? "two-rows" : "one-row"}`}',
   },
 ]);
