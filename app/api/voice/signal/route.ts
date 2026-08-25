@@ -7,9 +7,15 @@ type VoiceRoomState = {
   players?: { id: string }[];
 };
 
-type SignalType = "join" | "leave" | "offer" | "answer";
+type SignalType = "join" | "leave" | "offer" | "answer" | "candidate";
 
-const SIGNAL_TYPES = new Set<SignalType>(["join", "leave", "offer", "answer"]);
+const SIGNAL_TYPES = new Set<SignalType>([
+  "join",
+  "leave",
+  "offer",
+  "answer",
+  "candidate",
+]);
 
 export async function POST(request: Request) {
   await ensureSchema();
@@ -24,6 +30,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "Señal de voz inválida." }, { status: 400 });
   if ((type === "offer" || type === "answer") && (!sdp || sdp.length > 40000))
     return Response.json({ error: "Descripción WebRTC inválida." }, { status: 400 });
+  if (type === "candidate" && (!sdp || sdp.length > 8000))
+    return Response.json({ error: "Candidato ICE inválido." }, { status: 400 });
 
   const db = getDb();
   const [row] = await db.select().from(rooms).where(eq(rooms.code, roomCode)).limit(1);
