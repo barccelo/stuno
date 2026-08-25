@@ -1,10 +1,12 @@
-import { asc } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { ensureSchema, getDb } from "../../../db";
-import { categoryCards } from "../../../db/schema";
+import { categoryCards, categorySetMemberships } from "../../../db/schema";
 import { DEFAULT_CATEGORY_CARDS } from "../../../lib/categories";
 
 type CategoryInput = { easy: string; medium: string; expert: string };
+
+type CatalogCategory = CategoryInput & { sets: string[] };
 
 const INSERT_BATCH_SIZE = 15;
 
@@ -18,38 +20,42 @@ function authorized(request: Request) {
   return Boolean(expected && supplied && supplied === expected);
 }
 
+function categoryFingerprint(card: CategoryInput) {
+  return [card.easy, card.medium, card.expert]
+    .map((text) => text.trim().toLocaleLowerCase("es").replace(/\s+/g, " "))
+    .join("\u0000");
+}
+
+function cleanSetName(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\s+/g, " ").slice(0, 60);
+}
+
+function cleanCategory(value: unknown): CategoryInput | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const easy = typeof row.easy === "string" ? row.easy.trim() : "";
+  const medium = typeof row.medium === "string" ? row.medium.trim() : "";
+  const expert = typeof row.expert === "string" ? row.expert.trim() : "";
+  if (!easy || !medium || !expert || [easy, medium, expert].some((text) => text.length > 100))
+    return null;
+  return { easy, medium, expert };
+}
+
 function cleanCategories(value: unknown): CategoryInput[] | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 500)
     return null;
   const result: CategoryInput[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    if (!item || typeof item !== "object") return null;
-    const row = item as Record<string, unknown>;
-    const easy = typeof row.easy === "string" ? row.easy.trim() : "";
-    const medium = typeof row.medium === "string" ? row.medium.trim() : "";
-    const expert = typeof row.expert === "string" ? row.expert.trim() : "";
-    if (!easy || !medium || !expert || [easy, medium, expert].some((text) => text.length > 100))
-      return null;
-    const fingerprint = [easy, medium, expert]
-      .map((text) => text.toLocaleLowerCase("es").replace(/\s+/g, " "))
-      .join("\u0000");
+    const card = cleanCategory(item);
+    if (!card) return null;
+    const fingerprint = categoryFingerprint(card);
     if (seen.has(fingerprint)) continue;
     seen.add(fingerprint);
-    result.push({ easy, medium, expert });
+    result.push(card);
   }
   return result.length ? result : null;
-}
-
-async function readOrSeedCategories() {
-  const db = getDb();
-  let rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
-  if (!rows.length) {
-    await insertCategories(DEFAULT_CATEGORY_CARDS);
-    rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
-  }
-  const mapped = rows.map(({ easy, medium, expert }) => ({ easy, medium, expert }));
-  return cleanCategories(mapped) ?? mapped;
 }
 
 async function insertCategories(cards: CategoryInput[]) {
@@ -66,6 +72,38 @@ async function insertCategories(cards: CategoryInput[]) {
   }
 }
 
+async function readOrSeedCategories() {
+  const db = getDb();
+  let rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
+  if (!rows.length) {
+    await insertCategories(DEFAULT_CATEGORY_CARDS);
+    rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
+  }
+  return rows.map(({ easy, medium, expert }) => ({ easy, medium, expert }));
+}
+
+async function readCatalog() {
+  const db = getDb();
+  const categories = await readOrSeedCategories();
+  const memberships = await db.select().from(categorySetMemberships);
+  const setsByFingerprint = new Map<string, string[]>();
+  for (const membership of memberships) {
+    const list = setsByFingerprint.get(membership.fingerprint) ?? [];
+    if (!list.includes(membership.setName)) list.push(membership.setName);
+    setsByFingerprint.set(membership.fingerprint, list);
+  }
+  const catalog: CatalogCategory[] = categories.map((card) => ({
+    ...card,
+    sets: (setsByFingerprint.get(categoryFingerprint(card)) ?? []).sort((a, b) =>
+      a.localeCompare(b, "es", { sensitivity: "base" }),
+    ),
+  }));
+  const sets = Array.from(new Set(memberships.map((item) => item.setName))).sort((a, b) =>
+    a.localeCompare(b, "es", { sensitivity: "base" }),
+  );
+  return { categories: catalog, sets };
+}
+
 export async function GET(request: Request) {
   await ensureSchema();
   const url = new URL(request.url);
@@ -74,7 +112,7 @@ export async function GET(request: Request) {
       ? new Response(null, { status: 204 })
       : Response.json({ error: "Clave administrativa incorrecta." }, { status: 401 });
   }
-  return Response.json({ categories: await readOrSeedCategories() });
+  return Response.json(await readCatalog());
 }
 
 export async function PUT(request: Request) {
@@ -89,5 +127,86 @@ export async function PUT(request: Request) {
   const db = getDb();
   await db.delete(categoryCards);
   await insertCategories(clean);
-  return Response.json({ categories: clean });
+  return Response.json(await readCatalog());
+}
+
+export async function POST(request: Request) {
+  await ensureSchema();
+  if (!authorized(request))
+    return Response.json({ error: "Clave administrativa incorrecta." }, { status: 401 });
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const action = String(body?.action ?? "");
+  const db = getDb();
+
+  if (action === "quickAdd") {
+    const setName = cleanSetName(body?.setName);
+    const category = cleanCategory(body?.category);
+    if (!setName)
+      return Response.json({ error: "Indica el nombre del set." }, { status: 400 });
+    if (!category)
+      return Response.json({ error: "Completa Fácil, Media y Experta." }, { status: 400 });
+
+    const existing = await readOrSeedCategories();
+    const fingerprint = categoryFingerprint(category);
+    if (!existing.some((item) => categoryFingerprint(item) === fingerprint)) {
+      await db.insert(categoryCards).values({
+        ...category,
+        sortOrder: existing.length,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    const [membership] = await db
+      .select()
+      .from(categorySetMemberships)
+      .where(
+        and(
+          eq(categorySetMemberships.setName, setName),
+          eq(categorySetMemberships.fingerprint, fingerprint),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      await db.insert(categorySetMemberships).values({
+        setName,
+        fingerprint,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return Response.json(await readCatalog());
+  }
+
+  if (action === "saveSet") {
+    const setName = cleanSetName(body?.setName);
+    const requestedKeys = Array.isArray(body?.categoryKeys)
+      ? body.categoryKeys.filter((value): value is string => typeof value === "string")
+      : [];
+    if (!setName)
+      return Response.json({ error: "Indica el nombre del set." }, { status: 400 });
+    if (!requestedKeys.length)
+      return Response.json({ error: "Selecciona al menos una categoría para el set." }, { status: 400 });
+
+    const available = new Set((await readOrSeedCategories()).map(categoryFingerprint));
+    const keys = Array.from(new Set(requestedKeys)).filter((key) => available.has(key));
+    if (!keys.length)
+      return Response.json({ error: "No hay categorías válidas para guardar." }, { status: 400 });
+
+    await db
+      .delete(categorySetMemberships)
+      .where(eq(categorySetMemberships.setName, setName));
+    const updatedAt = new Date().toISOString();
+    for (let offset = 0; offset < keys.length; offset += 50) {
+      await db.insert(categorySetMemberships).values(
+        keys.slice(offset, offset + 50).map((fingerprint) => ({
+          setName,
+          fingerprint,
+          updatedAt,
+        })),
+      );
+    }
+    return Response.json(await readCatalog());
+  }
+
+  return Response.json({ error: "Acción desconocida." }, { status: 400 });
 }
