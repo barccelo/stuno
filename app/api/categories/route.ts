@@ -8,7 +8,10 @@ type CategoryInput = { title: string; easy: string; medium: string; expert: stri
 type StoredCategory = CategoryInput & { id: number; normalEnabled: boolean };
 type CatalogCategory = CategoryInput & { sets: string[]; normalEnabled: boolean };
 
-const INSERT_BATCH_SIZE = 15;
+// category_cards currently writes 7 bound values per row. D1 allows at most
+// 100 bound parameters per query, so keep each multi-row INSERT comfortably
+// below that ceiling.
+const INSERT_BATCH_SIZE = 12;
 
 function configuredAdminKey() {
   return env.CATEGORY_ADMIN_KEY;
@@ -179,14 +182,27 @@ export async function PUT(request: Request) {
   const visibility = new Map(
     previous.map((card) => [categoryFingerprint(card), card.normalEnabled] as const),
   );
-  await db.delete(categoryCards);
-  await insertCategories(
-    clean.map((card) => ({
-      ...card,
-      normalEnabled: visibility.get(categoryFingerprint(card)) ?? true,
-    })),
-  );
-  return Response.json(await readCatalog());
+  const nextCategories = clean.map((card) => ({
+    ...card,
+    normalEnabled: visibility.get(categoryFingerprint(card)) ?? true,
+  }));
+
+  try {
+    await db.delete(categoryCards);
+    await insertCategories(nextCategories);
+    return Response.json(await readCatalog());
+  } catch (error) {
+    // Best-effort restoration keeps a failed save from leaving the catalog empty.
+    try {
+      await db.delete(categoryCards);
+      await insertCategories(previous);
+    } catch {}
+    console.error("Failed to save category catalog", error);
+    return Response.json(
+      { error: "No se pudieron guardar las categorías. Intenta de nuevo." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
