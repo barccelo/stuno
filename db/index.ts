@@ -22,6 +22,7 @@ export async function ensureSchema() {
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS category_cards (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
       easy TEXT NOT NULL,
       medium TEXT NOT NULL,
       expert TEXT NOT NULL,
@@ -56,6 +57,15 @@ export async function ensureSchema() {
     try {
       await d1
         .prepare("ALTER TABLE category_cards ADD COLUMN normal_enabled INTEGER NOT NULL DEFAULT 1")
+        .run();
+    } catch (error) {
+      if (!String(error).toLocaleLowerCase().includes("duplicate column")) throw error;
+    }
+  }
+  if (!columns.some((column) => column.name === "title")) {
+    try {
+      await d1
+        .prepare("ALTER TABLE category_cards ADD COLUMN title TEXT NOT NULL DEFAULT ''")
         .run();
     } catch (error) {
       if (!String(error).toLocaleLowerCase().includes("duplicate column")) throw error;
