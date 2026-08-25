@@ -18,6 +18,7 @@ type Props = {
   playerId: string;
   players: VoicePlayer[];
   signals?: VoiceSignal[];
+  onActiveChange?: (active: boolean) => void;
 };
 
 type RemotePeer = {
@@ -55,7 +56,13 @@ async function capSender(sender: RTCRtpSender) {
   } catch {}
 }
 
-export default function VoiceChat({ roomCode, playerId, players, signals = [] }: Props) {
+export default function VoiceChat({
+  roomCode,
+  playerId,
+  players,
+  signals = [],
+  onActiveChange,
+}: Props) {
   const [active, setActive] = useState(false);
   const [joining, setJoining] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -200,6 +207,7 @@ export default function VoiceChat({ roomCode, playerId, players, signals = [] }:
       joinedAt.current = Date.now();
       activeRef.current = true;
       setActive(true);
+      onActiveChange?.(true);
       setPanelOpen(true);
       await sendSignal("join");
     } catch (cause) {
@@ -207,6 +215,7 @@ export default function VoiceChat({ roomCode, playerId, players, signals = [] }:
       localStream.current = null;
       activeRef.current = false;
       setActive(false);
+      onActiveChange?.(false);
       setError(
         cause instanceof Error
           ? cause.message
@@ -226,6 +235,7 @@ export default function VoiceChat({ roomCode, playerId, players, signals = [] }:
     handled.current.clear();
     setRemotePeers([]);
     setActive(false);
+    onActiveChange?.(false);
     setMuted(false);
     setPanelOpen(false);
   }
