@@ -5,8 +5,8 @@ import { categoryCards, categorySetMemberships } from "../../../db/schema";
 import { DEFAULT_CATEGORY_CARDS } from "../../../lib/categories";
 
 type CategoryInput = { easy: string; medium: string; expert: string };
-
-type CatalogCategory = CategoryInput & { sets: string[] };
+type StoredCategory = CategoryInput & { id: number; normalEnabled: boolean };
+type CatalogCategory = CategoryInput & { sets: string[]; normalEnabled: boolean };
 
 const INSERT_BATCH_SIZE = 15;
 
@@ -58,13 +58,16 @@ function cleanCategories(value: unknown): CategoryInput[] | null {
   return result.length ? result : null;
 }
 
-async function insertCategories(cards: CategoryInput[]) {
+async function insertCategories(cards: (CategoryInput & { normalEnabled?: boolean })[]) {
   const db = getDb();
   const updatedAt = new Date().toISOString();
   for (let offset = 0; offset < cards.length; offset += INSERT_BATCH_SIZE) {
     await db.insert(categoryCards).values(
       cards.slice(offset, offset + INSERT_BATCH_SIZE).map((card, index) => ({
-        ...card,
+        easy: card.easy,
+        medium: card.medium,
+        expert: card.expert,
+        normalEnabled: card.normalEnabled === false ? 0 : 1,
         sortOrder: offset + index,
         updatedAt,
       })),
@@ -72,14 +75,20 @@ async function insertCategories(cards: CategoryInput[]) {
   }
 }
 
-async function readOrSeedCategories() {
+async function readOrSeedCategories(): Promise<StoredCategory[]> {
   const db = getDb();
   let rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   if (!rows.length) {
-    await insertCategories(DEFAULT_CATEGORY_CARDS);
+    await insertCategories(DEFAULT_CATEGORY_CARDS.map((card) => ({ ...card, normalEnabled: true })));
     rows = await db.select().from(categoryCards).orderBy(asc(categoryCards.sortOrder));
   }
-  return rows.map(({ easy, medium, expert }) => ({ easy, medium, expert }));
+  return rows.map(({ id, easy, medium, expert, normalEnabled }) => ({
+    id,
+    easy,
+    medium,
+    expert,
+    normalEnabled: normalEnabled !== 0,
+  }));
 }
 
 async function readCatalog() {
@@ -93,7 +102,10 @@ async function readCatalog() {
     setsByFingerprint.set(membership.fingerprint, list);
   }
   const catalog: CatalogCategory[] = categories.map((card) => ({
-    ...card,
+    easy: card.easy,
+    medium: card.medium,
+    expert: card.expert,
+    normalEnabled: card.normalEnabled,
     sets: (setsByFingerprint.get(categoryFingerprint(card)) ?? []).sort((a, b) =>
       a.localeCompare(b, "es", { sensitivity: "base" }),
     ),
@@ -125,8 +137,17 @@ export async function PUT(request: Request) {
     return Response.json({ error: "Revisa que cada tarjeta tenga sus tres categorías." }, { status: 400 });
 
   const db = getDb();
+  const previous = await readOrSeedCategories();
+  const visibility = new Map(
+    previous.map((card) => [categoryFingerprint(card), card.normalEnabled] as const),
+  );
   await db.delete(categoryCards);
-  await insertCategories(clean);
+  await insertCategories(
+    clean.map((card) => ({
+      ...card,
+      normalEnabled: visibility.get(categoryFingerprint(card)) ?? true,
+    })),
+  );
   return Response.json(await readCatalog());
 }
 
@@ -152,6 +173,7 @@ export async function POST(request: Request) {
     if (!existing.some((item) => categoryFingerprint(item) === fingerprint)) {
       await db.insert(categoryCards).values({
         ...category,
+        normalEnabled: body?.normalEnabled === true ? 1 : 0,
         sortOrder: existing.length,
         updatedAt: new Date().toISOString(),
       });
@@ -204,6 +226,29 @@ export async function POST(request: Request) {
           updatedAt,
         })),
       );
+    }
+    return Response.json(await readCatalog());
+  }
+
+  if (action === "setNormalVisibility") {
+    const requestedKeys = Array.isArray(body?.categoryKeys)
+      ? body.categoryKeys.filter((value): value is string => typeof value === "string")
+      : [];
+    const normalEnabled = body?.normalEnabled === true;
+    if (!requestedKeys.length)
+      return Response.json({ error: "Selecciona al menos una categoría." }, { status: 400 });
+    const requested = new Set(requestedKeys);
+    const matching = (await readOrSeedCategories()).filter((card) =>
+      requested.has(categoryFingerprint(card)),
+    );
+    if (!matching.length)
+      return Response.json({ error: "No se encontraron categorías válidas." }, { status: 400 });
+    const updatedAt = new Date().toISOString();
+    for (const card of matching) {
+      await db
+        .update(categoryCards)
+        .set({ normalEnabled: normalEnabled ? 1 : 0, updatedAt })
+        .where(eq(categoryCards.id, card.id));
     }
     return Response.json(await readCatalog());
   }
