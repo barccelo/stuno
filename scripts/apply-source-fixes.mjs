@@ -72,9 +72,14 @@ await patchFile("app/page.tsx", [
 
 await patchFile("app/TurnNoticeWatcher.tsx", [
   {
+    label: "tipar el evento SWAP persistente",
+    from: '    lastEvent?: {\n      kind?: string;\n      actorId?: string;\n      targets?: { id?: string }[];\n      label?: string;\n      at?: number;\n    } | null;\n    players?: {',
+    to: '    lastEvent?: {\n      kind?: string;\n      actorId?: string;\n      targets?: { id?: string }[];\n      label?: string;\n      at?: number;\n    } | null;\n    lastSwapEvent?: {\n      kind?: string;\n      actorId?: string;\n      targets?: { id?: string }[];\n      label?: string;\n      at?: number;\n    } | null;\n    players?: {',
+  },
+  {
     label: "usar el evento SWAP persistente",
     from: '        const event = state?.lastEvent;',
-    to: '        const event =\n          (state as typeof state & { lastSwapEvent?: typeof state.lastEvent }).lastSwapEvent ??\n          state?.lastEvent;',
+    to: '        const event = state?.lastSwapEvent ?? state?.lastEvent;',
   },
   {
     label: "deduplicar SWAP entre refrescos y remontajes",
