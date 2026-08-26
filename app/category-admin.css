@@ -71,6 +71,38 @@
   width: 100%;
 }
 
+.waiting-players > span {
+  position: relative;
+  min-width: 0;
+}
+
+.waiting-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waiting-players .kick-player-button {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(154,85,96,.25);
+  border-radius: 50%;
+  background: rgba(154,85,96,.08);
+  color: #9a5560;
+  padding: 0;
+  cursor: pointer;
+}
+
+.waiting-players .kick-player-button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
 @media (max-width: 700px) {
   .category-row {
     grid-template-columns: 30px minmax(0,1fr) 30px;
@@ -85,5 +117,9 @@
     bottom: 10px;
     width: 42px;
     height: 42px;
+  }
+  .waiting-players .kick-player-button {
+    width: 28px;
+    height: 28px;
   }
 }
