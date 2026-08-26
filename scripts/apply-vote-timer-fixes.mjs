@@ -1,32 +1,33 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-async function patchFile(path, replacements) {
-  let source = await readFile(path, "utf8");
-  let changed = false;
-  for (const { from, to, label, all = false } of replacements) {
-    if (source.includes(to)) continue;
-    if (!source.includes(from)) {
-      throw new Error(`No se encontró el bloque esperado para: ${label}`);
-    }
-    source = all ? source.split(from).join(to) : source.replace(from, to);
-    changed = true;
-  }
-  if (changed) await writeFile(path, source, "utf8");
+function replaceEvery(source, from, to) {
+  return source.includes(from) ? source.split(from).join(to) : source;
 }
 
-await patchFile("lib/game.ts", [
-  {
-    label: "guardar vencimiento de la votación",
-    from: 'export type PendingVote = Submission & { votes: Record<string, boolean> };',
-    to: 'export type PendingVote = Submission & { votes: Record<string, boolean>; expiresAt?: number };',
-  },
-]);
+let game = await readFile("lib/game.ts", "utf8");
+const pendingVoteType =
+  'export type PendingVote = Submission & { votes: Record<string, boolean>; expiresAt?: number };';
+if (!game.includes(pendingVoteType)) {
+  game = game.replace(
+    'export type PendingVote = Submission & { votes: Record<string, boolean> };',
+    pendingVoteType,
+  );
+}
+if (!game.includes(pendingVoteType)) {
+  throw new Error("No se pudo añadir expiresAt a PendingVote.");
+}
+await writeFile("lib/game.ts", game, "utf8");
 
-await patchFile("app/api/rooms/route.ts", [
-  {
-    label: "crear votaciones con diez segundos independientes",
-    from: 'function drawWithEvent(state: GameState, target: Player, count = 1) {',
-    to: `const VOTE_DURATION_MS = 10000;
+let route = await readFile("app/api/rooms/route.ts", "utf8");
+
+if (!route.includes("const VOTE_DURATION_MS = 10000;")) {
+  const anchor = "function drawWithEvent(state: GameState, target: Player, count = 1) {";
+  if (!route.includes(anchor)) {
+    throw new Error("No se encontró el punto para crear el temporizador de votación.");
+  }
+  route = route.replace(
+    anchor,
+    `const VOTE_DURATION_MS = 10000;
 function makePendingVote(submission: Submission) {
   return {
     ...submission,
@@ -34,34 +35,40 @@ function makePendingVote(submission: Submission) {
     expiresAt: Date.now() + VOTE_DURATION_MS,
   };
 }
-function drawWithEvent(state: GameState, target: Player, count = 1) {`,
-  },
-  {
-    label: "temporizar primera revisión simultánea",
-    from: '  state.pendingVote = first ? { ...first, votes: {} } : null;',
-    to: '  state.pendingVote = first ? makePendingVote(first) : null;',
-  },
-  {
-    label: "temporizar revisiones siguientes",
-    from: '    state.pendingVote = next ? { ...next, votes: {} } : null;',
-    to: '    state.pendingVote = next ? makePendingVote(next) : null;',
-    all: true,
-  },
-  {
-    label: "temporizar votaciones de jugadas",
-    from: '          state.pendingVote = { ...submission, votes: {} };',
-    to: '          state.pendingVote = makePendingVote(submission);',
-    all: true,
-  },
-  {
-    label: "temporizar votación heredada de impugnación",
-    from: '      state.pendingVote = { ...state.pendingLive, votes: {} };',
-    to: '      state.pendingVote = makePendingVote(state.pendingLive);',
-  },
-  {
-    label: "resolver vencimiento de votación por mayoría emitida",
-    from: 'function acceptPendingLive(state: GameState) {',
-    to: `function finalizeExpiredVote(state: GameState) {
+${anchor}`,
+  );
+}
+
+// Every route that opens a validity vote goes through the same constructor.
+route = replaceEvery(
+  route,
+  "state.pendingVote = first ? { ...first, votes: {} } : null;",
+  "state.pendingVote = first ? makePendingVote(first) : null;",
+);
+route = replaceEvery(
+  route,
+  "state.pendingVote = next ? { ...next, votes: {} } : null;",
+  "state.pendingVote = next ? makePendingVote(next) : null;",
+);
+route = replaceEvery(
+  route,
+  "state.pendingVote = { ...submission, votes: {} };",
+  "state.pendingVote = makePendingVote(submission);",
+);
+route = replaceEvery(
+  route,
+  "state.pendingVote = { ...state.pendingLive, votes: {} };",
+  "state.pendingVote = makePendingVote(state.pendingLive);",
+);
+
+if (!route.includes("function finalizeExpiredVote(state: GameState)")) {
+  const anchor = "function acceptPendingLive(state: GameState) {";
+  if (!route.includes(anchor)) {
+    throw new Error("No se encontró el punto para cerrar votaciones vencidas.");
+  }
+  route = route.replace(
+    anchor,
+    `function finalizeExpiredVote(state: GameState) {
   const pending = state.pendingVote;
   if (!pending) return false;
   if (!pending.expiresAt) {
@@ -75,30 +82,30 @@ function drawWithEvent(state: GameState, target: Player, count = 1) {`,
   resolveVote(state, approved);
   return true;
 }
-function acceptPendingLive(state: GameState) {`,
-  },
-  {
-    label: "cerrar votaciones vencidas desde el polling de sala",
-    from: `  let changed = finalizeStartCountdown(state);
-  changed = finalizeExpiredLive(state) || changed;`,
-    to: `  let changed = finalizeStartCountdown(state);
-  changed = finalizeExpiredLive(state) || changed;
-  changed = finalizeExpiredVote(state) || changed;`,
-  },
-  {
-    label: "rechazar votos que llegan después del cierre",
-    from: `      if (!state.pendingVote)
-        return Response.json(
-          { error: "No hay una votación activa" },
-          { status: 409 },
-        );
-      if (state.pendingVote.playerId === playerId)`,
-    to: `      if (!state.pendingVote)
-        return Response.json(
-          { error: "No hay una votación activa" },
-          { status: 409 },
-        );
-      if (
+${anchor}`,
+  );
+}
+
+if (!route.includes("changed = finalizeExpiredVote(state) || changed;")) {
+  const anchor = "  changed = finalizeExpiredLive(state) || changed;";
+  if (!route.includes(anchor)) {
+    throw new Error("No se encontró el polling de la sala para revisar la votación.");
+  }
+  route = route.replace(
+    anchor,
+    `${anchor}\n  changed = finalizeExpiredVote(state) || changed;`,
+  );
+}
+
+if (!route.includes("Date.now() >= state.pendingVote.expiresAt")) {
+  const anchor = `      if (state.pendingVote.playerId === playerId)
+        return Response.json(`;
+  if (!route.includes(anchor)) {
+    throw new Error("No se encontró la acción vote para proteger votos tardíos.");
+  }
+  route = route.replace(
+    anchor,
+    `      if (
         state.pendingVote.expiresAt &&
         Date.now() >= state.pendingVote.expiresAt
       ) {
@@ -106,14 +113,34 @@ function acceptPendingLive(state: GameState) {`,
         await save(state);
         return Response.json({ state: publicState(state, playerId) });
       }
-      if (state.pendingVote.playerId === playerId)`,
-  },
-  {
-    label: "separar timeout de turno del tiempo de votación",
-    from: `        state.pendingLive ||
-        state.pendingPenalty ||`,
-    to: `        state.pendingLive ||
+${anchor}`,
+  );
+}
+
+// The normal turn timer must not resolve anything while the decision card is open.
+const timeoutWithoutVote = `        state.pendingLive ||
+        state.pendingPenalty ||`;
+const timeoutWithVote = `        state.pendingLive ||
         state.pendingVote ||
-        state.pendingPenalty ||`,
-  },
-]);
+        state.pendingPenalty ||`;
+if (!route.includes(timeoutWithVote) && route.includes(timeoutWithoutVote)) {
+  route = route.replace(timeoutWithoutVote, timeoutWithVote);
+}
+
+const required = [
+  [route.includes("const VOTE_DURATION_MS = 10000;"), "duración de 10 segundos"],
+  [route.includes("function makePendingVote"), "constructor de votaciones"],
+  [route.includes("function finalizeExpiredVote"), "cierre de votaciones vencidas"],
+  [route.includes("changed = finalizeExpiredVote(state) || changed;"), "revisión durante polling"],
+  [!route.includes("state.pendingVote = { ...submission, votes: {} };"), "jugadas sin temporizar"],
+  [!route.includes("state.pendingVote = first ? { ...first, votes: {} } : null;"), "primera revisión simultánea sin temporizar"],
+  [!route.includes("state.pendingVote = next ? { ...next, votes: {} } : null;"), "revisión simultánea posterior sin temporizar"],
+  [!route.includes("state.pendingVote = { ...state.pendingLive, votes: {} };"), "impugnación heredada sin temporizar"],
+];
+const failures = required.filter(([ok]) => !ok).map(([, label]) => label);
+if (failures.length) {
+  throw new Error(`Vote timer incompleto: ${failures.join(", ")}`);
+}
+
+await writeFile("app/api/rooms/route.ts", route, "utf8");
+console.log("Vote timer aplicado: 10 s independientes en todas las votaciones.");
