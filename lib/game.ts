@@ -126,7 +126,8 @@ export function makeDeck(idPrefix = ""): GameCard[] {
   for (let i = 0; i < 4; i++) add("BLOQUEAR TURNO", "stop");
   for (let i = 0; i < 4; i++) add("INVERSA", "reverse");
   for (let i = 0; i < 3; i++) add("SWAP", "swap");
-  for (let i = 0; i < 2; i++) add("NUEVA CATEGORÍA", "category");
+  // Keep the original two cards and add eighteen more: twenty total.
+  for (let i = 0; i < 20; i++) add("NUEVA CATEGORÍA", "category");
   return shuffle(cards);
 }
 
@@ -169,10 +170,31 @@ export function nextIndex(state: GameState, extra = 1) {
   }
 }
 export function chooseCategory(state: GameState) {
-  const source =
-    state.categories[state.categoryIndex % state.categories.length];
-  state.categoryIndex++;
-  state.categoryOptions = source;
+  const current = normalized(state.currentCategory?.text ?? "");
+  const levels = ["easy", "medium", "expert"] as const;
+  let nextOptions: CategoryCard | null = null;
+
+  for (let attempt = 0; attempt < state.categories.length; attempt++) {
+    const source = state.categories[state.categoryIndex % state.categories.length];
+    state.categoryIndex++;
+    const candidate: CategoryCard = {
+      ...source,
+      easy: current && normalized(source.easy) === current ? "" : source.easy,
+      medium: current && normalized(source.medium) === current ? "" : source.medium,
+      expert: current && normalized(source.expert) === current ? "" : source.expert,
+    };
+    if (levels.some((level) => candidate[level]?.trim())) {
+      nextOptions = candidate;
+      break;
+    }
+  }
+
+  if (!nextOptions) {
+    nextOptions = state.categories[state.categoryIndex % state.categories.length] ?? null;
+    if (nextOptions) state.categoryIndex++;
+  }
+
+  state.categoryOptions = nextOptions;
   state.currentCategory = null;
   state.turnStartedAt = 0;
 }
