@@ -4,6 +4,7 @@ import "./ui-fixes.css";
 import "./category-sets.css";
 import "./category-admin.css";
 import "./voice-chat.css";
+import "./vote-timer.css";
 import TurnNoticeWatcher from "./TurnNoticeWatcher";
 
 export const viewport: Viewport = {
