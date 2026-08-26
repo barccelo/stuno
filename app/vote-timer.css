@@ -1,6 +1,7 @@
 /* Independent voting timer. Keep the decision card spacious on phones and
    support both the native JSX timer and the direct runtime watcher fallback. */
 .vote-panel {
+  position: relative;
   width: min(500px, calc(100vw - 24px)) !important;
   padding: 24px !important;
 }
@@ -62,10 +63,20 @@
   letter-spacing: .16em;
 }
 
-/* Fallback watcher: its own row prevents collisions with the answer, letter
-   and voting buttons if the page bundle did not render the native header. */
+/* The runtime timer is centered over the answer area and removed from normal
+   flow, so it no longer forces a large empty block across the top of the card. */
 .vote-panel .vote-countdown-watcher {
-  margin: 8px 0 16px auto !important;
+  position: absolute;
+  top: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0 !important;
+  z-index: 2;
+}
+
+/* Reserve only the space the centered timer actually needs before the answer. */
+.vote-panel .vote-countdown-watcher + .vote-word {
+  margin-top: 58px !important;
 }
 
 .vote-panel .vote-countdown.ending {
@@ -92,5 +103,11 @@
   }
   .vote-panel .vote-countdown strong {
     font-size: 25px;
+  }
+  .vote-panel .vote-countdown-watcher {
+    top: 78px;
+  }
+  .vote-panel .vote-countdown-watcher + .vote-word {
+    margin-top: 50px !important;
   }
 }
