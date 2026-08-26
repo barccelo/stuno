@@ -14,14 +14,6 @@ async function patchFile(path, replacements) {
   if (changed) await writeFile(path, source, "utf8");
 }
 
-await patchFile("lib/game.ts", [
-  {
-    label: "tipar vencimiento de votación en estado de juego",
-    from: 'export type PendingVote = Submission & { votes: Record<string, boolean> };',
-    to: 'export type PendingVote = Submission & { votes: Record<string, boolean>; expiresAt?: number };',
-  },
-]);
-
 await patchFile("app/api/rooms/route.ts", [
   {
     label: "subir límite visible de salas a doce jugadores",
@@ -63,16 +55,6 @@ await patchFile("app/api/rooms/route.ts", [
     } else if (action === "shuffleCategories") {`,
   },
   {
-    label: "duración independiente de la votación",
-    from: `function cardFrom(hand: GameCard[], cardId: string) {
-  return hand.find((item) => item.id === cardId);
-}`,
-    to: `function cardFrom(hand: GameCard[], cardId: string) {
-  return hand.find((item) => item.id === cardId);
-}
-const VOTE_DURATION_MS = 10000;`,
-  },
-  {
     label: "votar directamente en vivo por turnos sin impugnación",
     from: `        } else if (state.settings.playStyle === "live") {
           state.pendingLive = {
@@ -88,61 +70,9 @@ const VOTE_DURATION_MS = 10000;`,
           state.message = `${actor!.name} jugó la ${card.label}. El grupo decide si la respuesta es válida.`;
         } else {`,
   },
-  {
-    label: "dar diez segundos a toda votación",
-    from: "votes: {}",
-    to: "votes: {}, expiresAt: Date.now() + VOTE_DURATION_MS",
-    all: true,
-  },
-  {
-    label: "resolver automáticamente votación vencida",
-    from: `function acceptPendingLive(state: GameState) {`,
-    to: `function finalizeExpiredVote(state: GameState) {
-  const pending = state.pendingVote;
-  if (!pending) return false;
-  if (!pending.expiresAt) {
-    pending.expiresAt = Date.now() + VOTE_DURATION_MS;
-    return true;
-  }
-  if (Date.now() < pending.expiresAt) return false;
-  const votes = Object.values(pending.votes);
-  const yes = votes.filter(Boolean).length;
-  resolveVote(state, votes.length > 0 && yes > votes.length / 2);
-  return true;
-}
-function acceptPendingLive(state: GameState) {`,
-  },
-  {
-    label: "revisar expiración de votación en polling",
-    from: `  changed = finalizeExpiredLive(state) || changed;
-  if (`,
-    to: `  changed = finalizeExpiredLive(state) || changed;
-  changed = finalizeExpiredVote(state) || changed;
-  if (`,
-  },
-  {
-    label: "rechazar voto que llegó después del tiempo",
-    from: `      if (state.pendingVote.playerId === playerId)
-        return Response.json(`,
-    to: `      if (state.pendingVote.expiresAt && Date.now() >= state.pendingVote.expiresAt) {
-        finalizeExpiredVote(state);
-        await save(state);
-        return Response.json({ state: publicState(state, playerId) });
-      }
-      if (state.pendingVote.playerId === playerId)
-        return Response.json(`,
-  },
 ]);
 
 await patchFile("app/page.tsx", [
-  {
-    label: "tipar vencimiento de votación",
-    from: `    votes: Record<string, boolean>;
-    cardLabel?: string;`,
-    to: `    votes: Record<string, boolean>;
-    expiresAt: number;
-    cardLabel?: string;`,
-  },
   {
     label: "detectar si el host retiró al jugador de la sala",
     from: `  useEffect(() => {
@@ -187,7 +117,7 @@ await patchFile("app/page.tsx", [
                 </span>`,
   },
   {
-    label: "contador visible en tarjeta de votación",
+    label: "texto de votación oral en vivo",
     from: `            <p>
               <b>{voteOwner?.name}</b> respondió
             </p>
@@ -204,35 +134,10 @@ await patchFile("app/page.tsx", [
                   : room.pendingVote.answer}”
               </h2>
             </div>`,
-    to: `            <div className="vote-panel-heading">
-              <p>
-                <b>{voteOwner?.name}</b>{" "}
-                {room.settings.playStyle === "live" ? "jugó" : "respondió"}
-              </p>
-              <div
-                className="vote-countdown"
-                aria-label={`${Math.max(0, Math.ceil((room.pendingVote.expiresAt - now) / 1000))} segundos para votar`}
-                style={
-                  {
-                    "--vote-progress": `${Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        ((room.pendingVote.expiresAt - now) / 10000) * 100,
-                      ),
-                    )}%`,
-                  } as React.CSSProperties
-                }
-              >
-                <strong>
-                  {Math.max(
-                    0,
-                    Math.ceil((room.pendingVote.expiresAt - now) / 1000),
-                  )}
-                </strong>
-                <small>SEG</small>
-              </div>
-            </div>
+    to: `            <p>
+              <b>{voteOwner?.name}</b>{" "}
+              {room.settings.playStyle === "live" ? "jugó" : "respondió"}
+            </p>
             <div className={`vote-word ${room.pendingVote.matchMode === "contains" ? "contains" : "starts"}`}>
               <span
                 className="vote-letter"
