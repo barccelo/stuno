@@ -6,9 +6,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "predev": "node scripts/apply-source-fixes.mjs && node scripts/apply-state-order-fixes.mjs && node scripts/apply-clock-sync-fixes.mjs && node scripts/apply-category-set-fixes.mjs && node scripts/apply-voice-chat-fixes.mjs && node scripts/apply-voice-ui-fixes.mjs && node scripts/apply-category-admin-fixes.mjs && node scripts/verify-category-admin-fixes.mjs",
+    "predev": "node scripts/apply-source-fixes.mjs && node scripts/apply-state-order-fixes.mjs && node scripts/apply-clock-sync-fixes.mjs && node scripts/apply-category-set-fixes.mjs && node scripts/apply-voice-chat-fixes.mjs && node scripts/apply-voice-ui-fixes.mjs && node scripts/apply-category-admin-fixes.mjs && node scripts/verify-category-admin-fixes.mjs && node scripts/apply-lobby-voting-rules.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/apply-source-fixes.mjs && node scripts/apply-state-order-fixes.mjs && node scripts/apply-clock-sync-fixes.mjs && node scripts/apply-category-set-fixes.mjs && node scripts/apply-voice-chat-fixes.mjs && node scripts/apply-voice-ui-fixes.mjs && node scripts/apply-category-admin-fixes.mjs && node scripts/verify-category-admin-fixes.mjs",
+    "prebuild": "node scripts/apply-source-fixes.mjs && node scripts/apply-state-order-fixes.mjs && node scripts/apply-clock-sync-fixes.mjs && node scripts/apply-category-set-fixes.mjs && node scripts/apply-voice-chat-fixes.mjs && node scripts/apply-voice-ui-fixes.mjs && node scripts/apply-category-admin-fixes.mjs && node scripts/verify-category-admin-fixes.mjs && node scripts/apply-lobby-voting-rules.mjs",
     "build": "vinext build",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy --keep-vars",
