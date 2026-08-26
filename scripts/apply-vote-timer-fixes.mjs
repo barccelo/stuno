@@ -82,7 +82,7 @@ if (!route.includes("function finalizeExpiredVote(state: GameState)")) {
   if (Date.now() < pending.expiresAt) return false;
   const votes = Object.values(pending.votes);
   const yes = votes.filter(Boolean).length;
-  const approved = votes.length > 0 && yes > votes.length / 2;
+  const approved = votes.length === 0 || yes > votes.length / 2;
   resolveVote(state, approved);
   return true;
 }
@@ -135,6 +135,7 @@ const required = [
   [route.includes("const VOTE_DURATION_MS = 10000;"), "duración de 10 segundos"],
   [route.includes("function makePendingVote"), "constructor de votaciones"],
   [route.includes("function finalizeExpiredVote"), "cierre de votaciones vencidas"],
+  [route.includes("const approved = votes.length === 0 || yes > votes.length / 2;"), "aceptación cuando nadie vota"],
   [route.includes("changed = finalizeExpiredVote(state) || changed;"), "revisión durante polling"],
   [!route.includes("state.pendingVote = { ...submission, votes: {} };"), "jugadas sin temporizar"],
   [!route.includes("state.pendingVote = first ? { ...first, votes: {} } : null;"), "primera revisión simultánea sin temporizar"],
