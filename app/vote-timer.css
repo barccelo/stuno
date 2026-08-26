@@ -63,20 +63,36 @@
   letter-spacing: .16em;
 }
 
-/* The runtime timer is centered over the answer area and removed from normal
-   flow, so it no longer forces a large empty block across the top of the card. */
-.vote-panel .vote-countdown-watcher {
-  position: absolute;
-  top: 82px;
-  left: 50%;
-  transform: translateX(-50%);
-  margin: 0 !important;
-  z-index: 2;
+/* One horizontal answer row: letter left, word centered, timer right. */
+.vote-panel .vote-word:has(.vote-countdown-watcher) {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 16px !important;
+  width: 100% !important;
 }
 
-/* Reserve only the space the centered timer actually needs before the answer. */
-.vote-panel .vote-countdown-watcher + .vote-word {
-  margin-top: 58px !important;
+.vote-panel .vote-word:has(.vote-countdown-watcher) .vote-letter {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.vote-panel .vote-word:has(.vote-countdown-watcher) h2 {
+  grid-column: 2;
+  min-width: 0;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  text-align: center !important;
+}
+
+.vote-panel .vote-countdown-watcher {
+  position: static;
+  grid-column: 3;
+  justify-self: end;
+  align-self: center;
+  transform: none;
+  margin: 0 !important;
+  z-index: 2;
 }
 
 .vote-panel .vote-countdown.ending {
@@ -104,10 +120,7 @@
   .vote-panel .vote-countdown strong {
     font-size: 25px;
   }
-  .vote-panel .vote-countdown-watcher {
-    top: 78px;
-  }
-  .vote-panel .vote-countdown-watcher + .vote-word {
-    margin-top: 50px !important;
+  .vote-panel .vote-word:has(.vote-countdown-watcher) {
+    column-gap: 12px !important;
   }
 }
