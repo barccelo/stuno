@@ -26,7 +26,15 @@ await patchFile("app/api/rooms/route.ts", [
   {
     label: "crear votaciones con diez segundos independientes",
     from: 'function drawWithEvent(state: GameState, target: Player, count = 1) {',
-    to: `const VOTE_DURATION_MS = 10000;\nfunction makePendingVote(submission: Submission) {\n  return {\n    ...submission,\n    votes: {},\n    expiresAt: Date.now() + VOTE_DURATION_MS,\n  };\n}\nfunction drawWithEvent(state: GameState, target: Player, count = 1) {`,
+    to: `const VOTE_DURATION_MS = 10000;
+function makePendingVote(submission: Submission) {
+  return {
+    ...submission,
+    votes: {},
+    expiresAt: Date.now() + VOTE_DURATION_MS,
+  };
+}
+function drawWithEvent(state: GameState, target: Player, count = 1) {`,
   },
   {
     label: "temporizar primera revisión simultánea",
@@ -53,39 +61,114 @@ await patchFile("app/api/rooms/route.ts", [
   {
     label: "resolver vencimiento de votación por mayoría emitida",
     from: 'function acceptPendingLive(state: GameState) {',
-    to: `function finalizeExpiredVote(state: GameState) {\n  const pending = state.pendingVote;\n  if (!pending) return false;\n  if (!pending.expiresAt) {\n    pending.expiresAt = Date.now() + VOTE_DURATION_MS;\n    return true;\n  }\n  if (Date.now() < pending.expiresAt) return false;\n  const votes = Object.values(pending.votes);\n  const yes = votes.filter(Boolean).length;\n  const approved = votes.length > 0 && yes > votes.length / 2;\n  resolveVote(state, approved);\n  return true;\n}\nfunction acceptPendingLive(state: GameState) {`,
+    to: `function finalizeExpiredVote(state: GameState) {
+  const pending = state.pendingVote;
+  if (!pending) return false;
+  if (!pending.expiresAt) {
+    pending.expiresAt = Date.now() + VOTE_DURATION_MS;
+    return true;
+  }
+  if (Date.now() < pending.expiresAt) return false;
+  const votes = Object.values(pending.votes);
+  const yes = votes.filter(Boolean).length;
+  const approved = votes.length > 0 && yes > votes.length / 2;
+  resolveVote(state, approved);
+  return true;
+}
+function acceptPendingLive(state: GameState) {`,
   },
   {
     label: "cerrar votaciones vencidas desde el polling de sala",
-    from: '  let changed = finalizeStartCountdown(state);\n  changed = finalizeExpiredLive(state) || changed;',
-    to: '  let changed = finalizeStartCountdown(state);\n  changed = finalizeExpiredLive(state) || changed;\n  changed = finalizeExpiredVote(state) || changed;',
+    from: `  let changed = finalizeStartCountdown(state);
+  changed = finalizeExpiredLive(state) || changed;`,
+    to: `  let changed = finalizeStartCountdown(state);
+  changed = finalizeExpiredLive(state) || changed;
+  changed = finalizeExpiredVote(state) || changed;`,
   },
   {
     label: "rechazar votos que llegan después del cierre",
-    from: `      if (!state.pendingVote)\n        return Response.json(\n          { error: "No hay una votación activa" },\n          { status: 409 },\n        );\n      if (state.pendingVote.playerId === playerId)`,
-    to: `      if (!state.pendingVote)\n        return Response.json(\n          { error: "No hay una votación activa" },\n          { status: 409 },\n        );\n      if (\n        state.pendingVote.expiresAt &&\n        Date.now() >= state.pendingVote.expiresAt\n      ) {\n        finalizeExpiredVote(state);\n        await save(state);\n        return Response.json({ state: publicState(state, playerId) });\n      }\n      if (state.pendingVote.playerId === playerId)`,
+    from: `      if (!state.pendingVote)
+        return Response.json(
+          { error: "No hay una votación activa" },
+          { status: 409 },
+        );
+      if (state.pendingVote.playerId === playerId)`,
+    to: `      if (!state.pendingVote)
+        return Response.json(
+          { error: "No hay una votación activa" },
+          { status: 409 },
+        );
+      if (
+        state.pendingVote.expiresAt &&
+        Date.now() >= state.pendingVote.expiresAt
+      ) {
+        finalizeExpiredVote(state);
+        await save(state);
+        return Response.json({ state: publicState(state, playerId) });
+      }
+      if (state.pendingVote.playerId === playerId)`,
   },
   {
     label: "separar timeout de turno del tiempo de votación",
-    from: '        state.pendingLive ||\n        state.pendingPenalty ||',
-    to: '        state.pendingLive ||\n        state.pendingVote ||\n        state.pendingPenalty ||',
+    from: `        state.pendingLive ||
+        state.pendingPenalty ||`,
+    to: `        state.pendingLive ||
+        state.pendingVote ||
+        state.pendingPenalty ||`,
   },
 ]);
 
 await patchFile("app/page.tsx", [
   {
     label: "tipar vencimiento de votación en cliente",
-    from: '    votes: Record<string, boolean>;\n    cardLabel?: string;',
-    to: '    votes: Record<string, boolean>;\n    expiresAt?: number;\n    cardLabel?: string;',
+    from: `    votes: Record<string, boolean>;
+    cardLabel?: string;`,
+    to: `    votes: Record<string, boolean>;
+    expiresAt?: number;
+    cardLabel?: string;`,
   },
   {
     label: "calcular contador visual de votación",
-    from: `    const voteOwner =\n      room.pendingVote &&\n      room.players.find((item) => item.id === room.pendingVote?.playerId);\n    const winner = room.players.find((item) => item.id === room.winnerId);`,
-    to: `    const voteOwner =\n      room.pendingVote &&\n      room.players.find((item) => item.id === room.pendingVote?.playerId);\n    const voteRemaining = room.pendingVote?.expiresAt\n      ? Math.max(0, Math.ceil((room.pendingVote.expiresAt - now) / 1000))\n      : 10;\n    const winner = room.players.find((item) => item.id === room.winnerId);`,
+    from: `    const voteOwner =
+      room.pendingVote &&
+      room.players.find((item) => item.id === room.pendingVote?.playerId);
+    const winner = room.players.find((item) => item.id === room.winnerId);`,
+    to: `    const voteOwner =
+      room.pendingVote &&
+      room.players.find((item) => item.id === room.pendingVote?.playerId);
+    const voteRemaining = room.pendingVote?.expiresAt
+      ? Math.max(0, Math.ceil((room.pendingVote.expiresAt - now) / 1000))
+      : 10;
+    const voteProgress = room.pendingVote?.expiresAt
+      ? Math.max(0, Math.min(100, ((room.pendingVote.expiresAt - now) / VOTE_SECONDS_MS) * 100))
+      : 100;
+    const winner = room.players.find((item) => item.id === room.winnerId);`,
+  },
+  {
+    label: "definir duración visual de votación",
+    from: 'const starterCategories = DEFAULT_CATEGORY_CARDS.map(',
+    to: 'const VOTE_SECONDS_MS = 10000;\nconst starterCategories = DEFAULT_CATEGORY_CARDS.map(',
   },
   {
     label: "integrar contador en cabecera de tarjeta de votación",
-    from: `            <p>\n              <b>{voteOwner?.name}</b>{" "}\n              {room.settings.playStyle === "live" ? "jugó" : "respondió"}\n            </p>`,
-    to: `            <div className="vote-panel-head">\n              <p>\n                <b>{voteOwner?.name}</b>{" "}\n                {room.settings.playStyle === "live" ? "jugó" : "respondió"}\n              </p>\n              <div\n                className={\`vote-countdown ${voteRemaining <= 3 ? "ending" : ""}\`}\n                aria-label={\`${voteRemaining} segundos para votar\`}\n                aria-live="polite"\n              >\n                <strong>{voteRemaining}</strong>\n                <small>SEG</small>\n              </div>\n            </div>`,
+    from: `            <p>
+              <b>{voteOwner?.name}</b>{" "}
+              {room.settings.playStyle === "live" ? "jugó" : "respondió"}
+            </p>`,
+    to: `            <div className="vote-panel-heading">
+              <p>
+                <b>{voteOwner?.name}</b>{" "}
+                {room.settings.playStyle === "live" ? "jugó" : "respondió"}
+              </p>
+              <div
+                className="vote-countdown"
+                aria-label={`${voteRemaining} segundos para votar`}
+                aria-live="polite"
+                style={{ "--vote-progress": `${voteProgress}%` } as React.CSSProperties}
+              >
+                <strong>{voteRemaining}</strong>
+                <small>SEG</small>
+              </div>
+            </div>`,
   },
 ]);
