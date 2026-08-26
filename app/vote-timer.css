@@ -1,35 +1,20 @@
-/* Independent voting timer. Keep the decision card spacious on phones and
-   support both the native JSX timer and the direct runtime watcher fallback. */
+/* Independent voting timer. Keep the decision card in its original position
+   and place the countdown in the same answer row: letter, word, timer. */
 .vote-panel {
-  position: relative;
+  position: absolute !important;
+  left: 50% !important;
+  top: 49% !important;
+  transform: translate(-50%, -50%) !important;
   width: min(500px, calc(100vw - 24px)) !important;
   padding: 24px !important;
 }
 
-.vote-panel .vote-panel-head,
-.vote-panel .vote-panel-heading {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 18px !important;
-  width: 100% !important;
-  min-height: 64px;
-  margin: 0 0 16px !important;
-  text-align: left !important;
-}
-
-.vote-panel .vote-panel-head p,
-.vote-panel .vote-panel-heading p {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0 !important;
-  font-size: 13px !important;
-  line-height: 1.4;
+.vote-panel > p {
+  margin: 0 0 12px !important;
 }
 
 .vote-panel .vote-countdown {
   --vote-progress: 100%;
-  flex: 0 0 64px;
   width: 64px;
   height: 64px;
   display: grid !important;
@@ -63,34 +48,35 @@
   letter-spacing: .16em;
 }
 
-/* One horizontal answer row: letter left, word centered, timer right. */
-.vote-panel .vote-word:has(.vote-countdown-watcher) {
+/* This applies before and after the watcher inserts the timer, avoiding :has
+   and keeping equal side columns so the answer remains truly centered. */
+.vote-panel .vote-word {
   display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  grid-template-columns: 64px minmax(0, 1fr) 64px !important;
   align-items: center !important;
-  column-gap: 16px !important;
+  column-gap: 14px !important;
   width: 100% !important;
+  margin-bottom: 16px !important;
 }
 
-.vote-panel .vote-word:has(.vote-countdown-watcher) .vote-letter {
-  grid-column: 1;
-  justify-self: start;
+.vote-panel .vote-word .vote-letter {
+  grid-column: 1 !important;
+  justify-self: start !important;
 }
 
-.vote-panel .vote-word:has(.vote-countdown-watcher) h2 {
-  grid-column: 2;
+.vote-panel .vote-word h2 {
+  grid-column: 2 !important;
   min-width: 0;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  margin: 0 !important;
   text-align: center !important;
 }
 
 .vote-panel .vote-countdown-watcher {
-  position: static;
-  grid-column: 3;
-  justify-self: end;
-  align-self: center;
-  transform: none;
+  position: static !important;
+  grid-column: 3 !important;
+  justify-self: end !important;
+  align-self: center !important;
+  transform: none !important;
   margin: 0 !important;
   z-index: 2;
 }
@@ -105,22 +91,24 @@
 @media (max-width: 520px) {
   .vote-panel {
     width: calc(100vw - 18px) !important;
-    padding: 20px !important;
+    padding: 18px !important;
   }
-  .vote-panel .vote-panel-head,
-  .vote-panel .vote-panel-heading {
-    gap: 12px !important;
-    margin-bottom: 14px !important;
+
+  .vote-panel > p {
+    margin-bottom: 10px !important;
   }
+
+  .vote-panel .vote-word {
+    grid-template-columns: 56px minmax(0, 1fr) 56px !important;
+    column-gap: 10px !important;
+  }
+
   .vote-panel .vote-countdown {
-    flex-basis: 56px;
     width: 56px;
     height: 56px;
   }
+
   .vote-panel .vote-countdown strong {
     font-size: 25px;
-  }
-  .vote-panel .vote-word:has(.vote-countdown-watcher) {
-    column-gap: 12px !important;
   }
 }
