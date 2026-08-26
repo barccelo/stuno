@@ -14,6 +14,14 @@ async function patchFile(path, replacements) {
   if (changed) await writeFile(path, source, "utf8");
 }
 
+await patchFile("lib/game.ts", [
+  {
+    label: "tipar vencimiento de votación en estado de juego",
+    from: 'export type PendingVote = Submission & { votes: Record<string, boolean> };',
+    to: 'export type PendingVote = Submission & { votes: Record<string, boolean>; expiresAt?: number };',
+  },
+]);
+
 await patchFile("app/api/rooms/route.ts", [
   {
     label: "subir límite visible de salas a doce jugadores",
@@ -51,7 +59,7 @@ await patchFile("app/api/rooms/route.ts", [
       const [removed] = state.players.splice(targetIndex, 1);
       if (targetIndex < state.turnIndex) state.turnIndex--;
       state.turnIndex = Math.max(0, Math.min(state.turnIndex, state.players.length - 1));
-      state.message = \`\${removed.name} fue retirado de la sala por el anfitrión.\`;
+      state.message = `${removed.name} fue retirado de la sala por el anfitrión.`;
     } else if (action === "shuffleCategories") {`,
   },
   {
@@ -72,12 +80,12 @@ const VOTE_DURATION_MS = 10000;`,
             expiresAt: Date.now() + 4500,
             passes: [],
           };
-          state.message = \`\${actor!.name} jugó la \${card.label}. Se puede impugnar durante 4 segundos.\`;
+          state.message = `${actor!.name} jugó la ${card.label}. Se puede impugnar durante 4 segundos.`;
         } else {`,
     to: `        } else if (state.settings.playStyle === "live") {
           state.pendingVote = { ...submission, votes: {} };
           state.pendingLive = null;
-          state.message = \`\${actor!.name} jugó la \${card.label}. El grupo decide si la respuesta es válida.\`;
+          state.message = `${actor!.name} jugó la ${card.label}. El grupo decide si la respuesta es válida.`;
         } else {`,
   },
   {
@@ -149,7 +157,7 @@ await patchFile("app/page.tsx", [
     setRoom(null);
     setPlayerId("");
     setRoomCode("");
-    history.replaceState(null, "", \`\${location.pathname}?join=1\`);
+    history.replaceState(null, "", `${location.pathname}?join=1`);
     setParticipantPortal(true);
     setScreen("join");
     show("El anfitrión te retiró de la sala.");
@@ -168,8 +176,8 @@ await patchFile("app/page.tsx", [
                     <button
                       type="button"
                       className="kick-player-button"
-                      aria-label={\`Retirar a \${item.name}\`}
-                      title={\`Retirar a \${item.name}\`}
+                      aria-label={`Retirar a ${item.name}`}
+                      title={`Retirar a ${item.name}`}
                       onClick={() => void act("kickPlayer", { targetId: item.id })}
                       disabled={busy}
                     >
@@ -183,7 +191,7 @@ await patchFile("app/page.tsx", [
     from: `            <p>
               <b>{voteOwner?.name}</b> respondió
             </p>
-            <div className={\`vote-word \${room.pendingVote.matchMode === "contains" ? "contains" : "starts"}\`}>
+            <div className={`vote-word ${room.pendingVote.matchMode === "contains" ? "contains" : "starts"}`}>
               <span
                 className="vote-letter"
                 title={room.pendingVote.matchMode === "contains" ? "La respuesta contiene esta letra" : "La respuesta comienza con esta letra"}
@@ -203,16 +211,16 @@ await patchFile("app/page.tsx", [
               </p>
               <div
                 className="vote-countdown"
-                aria-label={\`\${Math.max(0, Math.ceil((room.pendingVote.expiresAt - now) / 1000))} segundos para votar\`}
+                aria-label={`${Math.max(0, Math.ceil((room.pendingVote.expiresAt - now) / 1000))} segundos para votar`}
                 style={
                   {
-                    "--vote-progress": \`\${Math.max(
+                    "--vote-progress": `${Math.max(
                       0,
                       Math.min(
                         100,
                         ((room.pendingVote.expiresAt - now) / 10000) * 100,
                       ),
-                    )}%\`,
+                    )}%`,
                   } as React.CSSProperties
                 }
               >
@@ -225,7 +233,7 @@ await patchFile("app/page.tsx", [
                 <small>SEG</small>
               </div>
             </div>
-            <div className={\`vote-word \${room.pendingVote.matchMode === "contains" ? "contains" : "starts"}\`}>
+            <div className={`vote-word ${room.pendingVote.matchMode === "contains" ? "contains" : "starts"}`}>
               <span
                 className="vote-letter"
                 title={room.pendingVote.matchMode === "contains" ? "La respuesta contiene esta letra" : "La respuesta comienza con esta letra"}
