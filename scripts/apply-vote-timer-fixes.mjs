@@ -5,16 +5,20 @@ function replaceEvery(source, from, to) {
 }
 
 let game = await readFile("lib/game.ts", "utf8");
-const pendingVoteType =
+const pendingVoteOptional =
   'export type PendingVote = Submission & { votes: Record<string, boolean>; expiresAt?: number };';
-if (!game.includes(pendingVoteType)) {
-  game = game.replace(
-    'export type PendingVote = Submission & { votes: Record<string, boolean> };',
-    pendingVoteType,
-  );
+const pendingVoteRequired = `export type PendingVote = Submission & {
+  votes: Record<string, boolean>;
+  expiresAt: number;
+};`;
+const pendingVoteLegacy =
+  'export type PendingVote = Submission & { votes: Record<string, boolean> };';
+
+if (!game.includes(pendingVoteOptional) && !game.includes(pendingVoteRequired)) {
+  game = game.replace(pendingVoteLegacy, pendingVoteOptional);
 }
-if (!game.includes(pendingVoteType)) {
-  throw new Error("No se pudo añadir expiresAt a PendingVote.");
+if (!game.includes(pendingVoteOptional) && !game.includes(pendingVoteRequired)) {
+  throw new Error("No se pudo verificar expiresAt en PendingVote.");
 }
 await writeFile("lib/game.ts", game, "utf8");
 
