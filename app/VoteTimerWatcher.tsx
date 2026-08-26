@@ -118,15 +118,21 @@ export default function VoteTimerWatcher() {
         Math.min(100, ((expiresAt - now) / VOTE_DURATION_MS) * 100),
       );
 
+      const voteWord = panel.querySelector<HTMLElement>(".vote-word");
       let countdown = existing;
       if (!countdown || !panel.contains(countdown)) {
         countdown = document.createElement("div");
         countdown.className = "vote-countdown vote-countdown-watcher";
         countdown.setAttribute("role", "timer");
         countdown.innerHTML = "<strong></strong><small>SEG</small>";
-        const voteWord = panel.querySelector(".vote-word");
-        if (voteWord) panel.insertBefore(countdown, voteWord);
-        else panel.appendChild(countdown);
+      }
+
+      // Keep the timer in the same visual row as the letter and answer:
+      // letter on the left, answer in the middle, countdown on the right.
+      if (voteWord && countdown.parentElement !== voteWord) {
+        voteWord.appendChild(countdown);
+      } else if (!voteWord && countdown.parentElement !== panel) {
+        panel.appendChild(countdown);
       }
 
       countdown.classList.toggle("ending", remaining <= 3);
