@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 const VOTE_DURATION_MS = 10000;
 const VOTE_EVENT = "stuno-vote-timer-state";
@@ -33,8 +33,7 @@ function voteStateFromRoom(state: Record<string, unknown> | null): VoteTimerStat
 }
 
 export default function VoteTimerWatcher() {
-  const [serverVote, setServerVote] = useState<VoteTimerState>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const serverVote = useRef<VoteTimerState>(null);
   const fallbackKey = useRef("");
   const fallbackExpiresAt = useRef(0);
 
@@ -70,15 +69,11 @@ export default function VoteTimerWatcher() {
 
   useEffect(() => {
     const onVoteState = (event: Event) => {
-      setServerVote((event as CustomEvent<VoteTimerState>).detail ?? null);
+      serverVote.current =
+        (event as CustomEvent<VoteTimerState>).detail ?? null;
     };
     window.addEventListener(VOTE_EVENT, onVoteState);
     return () => window.removeEventListener(VOTE_EVENT, onVoteState);
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 200);
-    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -87,6 +82,7 @@ export default function VoteTimerWatcher() {
       const existing = document.querySelector<HTMLElement>(
         ".vote-countdown-watcher",
       );
+
       if (!panel) {
         existing?.remove();
         fallbackKey.current = "";
@@ -94,21 +90,28 @@ export default function VoteTimerWatcher() {
         return;
       }
 
-      // If the page itself already rendered the native countdown, never duplicate it.
+      // If page.tsx already rendered its own timer, do not duplicate it.
       if (panel.querySelector(".vote-countdown:not(.vote-countdown-watcher)")) {
         existing?.remove();
         return;
       }
 
-      const panelIdentity = Array.from(panel.querySelectorAll("p, .vote-letter, .vote-word h2"))
+      const panelIdentity = Array.from(
+        panel.querySelectorAll("p, .vote-letter, .vote-word h2"),
+      )
         .map((node) => node.textContent?.trim() ?? "")
         .join("|");
-      if (!serverVote && panelIdentity !== fallbackKey.current) {
+
+      if (!serverVote.current && panelIdentity !== fallbackKey.current) {
         fallbackKey.current = panelIdentity;
         fallbackExpiresAt.current = Date.now() + VOTE_DURATION_MS;
       }
 
-      const expiresAt = serverVote?.expiresAt || fallbackExpiresAt.current || Date.now() + VOTE_DURATION_MS;
+      const expiresAt =
+        serverVote.current?.expiresAt ||
+        fallbackExpiresAt.current ||
+        Date.now() + VOTE_DURATION_MS;
+      const now = Date.now();
       const remaining = Math.max(0, Math.ceil((expiresAt - now) / 1000));
       const progress = Math.max(
         0,
@@ -130,17 +133,19 @@ export default function VoteTimerWatcher() {
       countdown.setAttribute("aria-label", `${remaining} segundos para votar`);
       countdown.style.setProperty("--vote-progress", `${progress}%`);
       const value = countdown.querySelector("strong");
-      if (value) value.textContent = String(remaining);
+      const nextValue = String(remaining);
+      if (value && value.textContent !== nextValue) value.textContent = nextValue;
     };
 
+    // Polling is intentional here: it avoids a MutationObserver feedback loop
+    // when the timer itself updates the DOM, and is lightweight on mobile.
     renderTimer();
-    const observer = new MutationObserver(renderTimer);
-    observer.observe(document.body, { childList: true, subtree: true });
+    const timer = window.setInterval(renderTimer, 250);
     return () => {
-      observer.disconnect();
+      window.clearInterval(timer);
       document.querySelector(".vote-countdown-watcher")?.remove();
     };
-  }, [now, serverVote]);
+  }, []);
 
   return null;
 }
