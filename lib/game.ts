@@ -22,7 +22,10 @@ export type Submission = {
   cardLabel?: string;
   matchMode?: "starts" | "contains";
 };
-export type PendingVote = Submission & { votes: Record<string, boolean> };
+export type PendingVote = Submission & {
+  votes: Record<string, boolean>;
+  expiresAt: number;
+};
 export type PendingLive = Submission & { expiresAt: number; passes?: string[] };
 export type LastPlay = {
   playerId: string;
