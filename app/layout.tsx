@@ -6,6 +6,7 @@ import "./category-admin.css";
 import "./voice-chat.css";
 import "./vote-timer.css";
 import TurnNoticeWatcher from "./TurnNoticeWatcher";
+import VoteTimerWatcher from "./VoteTimerWatcher";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <TurnNoticeWatcher />
+        <VoteTimerWatcher />
       </body>
     </html>
   );
