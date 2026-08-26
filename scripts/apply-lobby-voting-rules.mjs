@@ -112,7 +112,7 @@ await patchFile("app/page.tsx", [
     from: `                  {item.name}
                   {item.id === room.hostId && <small>ANFITRIÓN</small>}
                 </span>`,
-    to: `                  <span className="waiting-player-name">{item.name}</span>
+    to: `                  <strong className="waiting-player-name">{item.name}</strong>
                   {item.id === room.hostId && <small>ANFITRIÓN</small>}
                   {playerId === room.hostId && item.id !== room.hostId && (
                     <button
