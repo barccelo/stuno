@@ -37,8 +37,53 @@
   height: 12px !important;
 }
 
-/* Voting card: symmetric side columns keep the submitted word centered against
-   the entire card for every letter and for both the sender and the voters. */
+/* Voting card: leave enough breathing room for the word, decision buttons and
+   the independent countdown. The timer is part of the header instead of being
+   layered on top of the answer. */
+.vote-panel {
+  width: min(500px, 92vw) !important;
+  padding: 26px 28px 24px !important;
+}
+.vote-panel-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px;
+  gap: 18px;
+  align-items: center;
+  min-height: 62px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+.vote-panel-heading p {
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+}
+.vote-countdown {
+  --vote-progress: 100%;
+  width: 62px;
+  height: 62px;
+  justify-self: end;
+  display: grid;
+  place-content: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #fff 59%, transparent 61%),
+    conic-gradient(var(--blue, #2455d6) var(--vote-progress), rgba(20,33,61,.12) 0);
+  text-align: center;
+}
+.vote-countdown strong {
+  display: block;
+  font: 700 25px/1 Georgia, serif;
+  letter-spacing: -.03em;
+}
+.vote-countdown small {
+  display: block;
+  margin-top: 2px;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  color: #68738a;
+}
 .vote-panel .vote-word {
   position: relative !important;
   display: grid !important;
@@ -47,7 +92,7 @@
   align-items: center !important;
   width: 100% !important;
   min-height: 64px !important;
-  margin-bottom: 16px !important;
+  margin-bottom: 18px !important;
   padding: 0 !important;
   text-align: center !important;
 }
@@ -287,6 +332,23 @@ html.swap-whole-animating .hand-toolbar > strong::after {
 }
 
 @media (max-width: 520px) {
+  .vote-panel {
+    width: min(94vw, 470px) !important;
+    padding: 20px 18px 19px !important;
+  }
+  .vote-panel-heading {
+    grid-template-columns: minmax(0, 1fr) 54px;
+    gap: 12px;
+    min-height: 54px;
+    margin-bottom: 12px;
+  }
+  .vote-countdown {
+    width: 54px;
+    height: 54px;
+  }
+  .vote-countdown strong {
+    font-size: 22px;
+  }
   .vote-panel .vote-word {
     grid-template-columns: 54px minmax(0, 1fr) 54px !important;
     gap: 10px !important;
