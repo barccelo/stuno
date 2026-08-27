@@ -90,6 +90,20 @@ export default function VoteTimerWatcher() {
         return;
       }
 
+      const answerHeading = panel.querySelector<HTMLElement>(".vote-word h2");
+      const answerText = (answerHeading?.textContent ?? "")
+        .replace(/[“”‘’'\"«»]/g, "")
+        .trim();
+      const longestToken = answerText
+        .split(/\s+/)
+        .reduce((longest, token) => Math.max(longest, token.length), 0);
+      panel.classList.toggle("vote-answer-long", answerText.length > 14);
+      panel.classList.toggle("vote-answer-very-long", answerText.length > 24);
+      panel.classList.toggle(
+        "vote-answer-extra-long",
+        answerText.length > 34 || longestToken > 17,
+      );
+
       // If page.tsx already rendered its own timer, do not duplicate it.
       if (panel.querySelector(".vote-countdown:not(.vote-countdown-watcher)")) {
         existing?.remove();
