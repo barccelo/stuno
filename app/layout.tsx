@@ -5,6 +5,7 @@ import "./category-sets.css";
 import "./category-admin.css";
 import "./voice-chat.css";
 import "./vote-timer.css";
+import "./hand-layout-fixes.css";
 import TurnNoticeWatcher from "./TurnNoticeWatcher";
 import VoteTimerWatcher from "./VoteTimerWatcher";
 
