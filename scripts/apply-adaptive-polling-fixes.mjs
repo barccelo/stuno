@@ -19,8 +19,19 @@ if (start < 0) {
   throw new Error("No se encontró el polling de sala esperado.");
 }
 
-const endMarker = '  }, [screen, room?.code, playerId]);';
-const endStart = before.indexOf(endMarker, start);
+const endMarkers = [
+  '  }, [screen, room?.code, playerId, voiceListening]);',
+  '  }, [screen, room?.code, playerId]);',
+];
+let endStart = -1;
+let endMarker = "";
+for (const candidate of endMarkers) {
+  const found = before.indexOf(candidate, start);
+  if (found >= 0 && (endStart < 0 || found < endStart)) {
+    endStart = found;
+    endMarker = candidate;
+  }
+}
 if (endStart < 0) {
   throw new Error("No se encontró el cierre del polling de sala.");
 }
@@ -37,6 +48,7 @@ const replacement = [
   '',
   '    const adaptiveRoomPollDelay = () => {',
   '      if (document.hidden) return 12000;',
+  '      if (voiceListening) return 900;',
   '      if (room.status === "lobby") return 3000;',
   '      if (room.status === "finished" || room.status === "closed") return 6000;',
   '      if (room.pausedAt) return 3200;',
@@ -63,10 +75,15 @@ const replacement = [
   '      if (cancelled || inFlight) return;',
   '      inFlight = true;',
   '      try {',
-  '        const response = await fetch(',
-  '          "/api/rooms?code=" + encodeURIComponent(roomCode) + "&playerId=" + encodeURIComponent(playerId),',
-  '          { cache: "no-store", signal: controller.signal },',
-  '        );',
+  '        const query =',
+  '          "/api/rooms?code=" + encodeURIComponent(roomCode) +',
+  '          "&playerId=" + encodeURIComponent(playerId) +',
+  '          "&voice=" + (voiceListening ? "1" : "0") +',
+  '          "&voiceSince=" + encodeURIComponent(String(voiceSignalSince.current));',
+  '        const response = await fetch(query, {',
+  '          cache: "no-store",',
+  '          signal: controller.signal,',
+  '        });',
   '        if (response.ok) {',
   '          const data = await response.json();',
   '          applyRoom(data.state);',
@@ -112,6 +129,7 @@ const replacement = [
   '    Boolean(room?.pendingPenalty),',
   '    Boolean(room?.categoryOptions),',
   '    playerId,',
+  '    voiceListening,',
   '  ]);',
 ].join("\n");
 
