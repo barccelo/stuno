@@ -91,7 +91,10 @@ await patch("lib/game.ts", (source) => {
       )
     : null;
   const currentCardKey =
-    state.currentCategoryCardKey || categoryCardKey(inferredCurrentCard);
+    state.categoryOptionsCardKey ||
+    categoryCardKey(inferredCurrentCard) ||
+    state.currentCategoryCardKey ||
+    "";
   let nextOptions: CategoryCard | null = null;
   let nextOptionsKey = "";
   let deferredCurrentCard: CategoryCard | null = null;
@@ -185,15 +188,6 @@ await patch("app/api/rooms/route.ts", (source) => {
       "        state.currentCategory = state.selectedCategory;\n",
       '        state.currentCategory = state.selectedCategory;\n        const selectedSourceAtStart = state.categories.find((card) =>\n          normalized(card[state.selectedCategory!.level] ?? "") ===\n          normalized(state.selectedCategory!.text),\n        );\n        state.currentCategoryCardKey = categoryCardKey(selectedSourceAtStart);\n        state.categoryOptionsCardKey = null;\n',
       "identificar tarjeta inicial al comenzar",
-    );
-  }
-
-  if (!source.includes("state.currentCategoryCardKey = state.categoryOptionsCardKey ?? categoryCardKey(options);")) {
-    source = requireReplace(
-      source,
-      "      state.currentCategory = { level, text: options[level] };\n",
-      "      state.currentCategory = { level, text: options[level] };\n      state.currentCategoryCardKey = state.categoryOptionsCardKey ?? categoryCardKey(options);\n      state.categoryOptionsCardKey = null;\n",
-      "identificar tarjeta elegida en partida",
     );
   }
 
