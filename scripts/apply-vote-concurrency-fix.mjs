@@ -3,13 +3,20 @@ import { readFile, writeFile } from "node:fs/promises";
 const path = "app/api/rooms/route.ts";
 let source = await readFile(path, "utf8");
 
-if (!source.includes('import { and, desc, eq } from "drizzle-orm";')) {
-  if (!source.includes('import { desc, eq } from "drizzle-orm";')) {
-    throw new Error("No se encontró el import de drizzle esperado.");
-  }
+// Earlier build patches may already expand the drizzle import for voice signals.
+// Only add `and` when it is genuinely absent; do not assume an exact import list.
+const drizzleImport = source.match(/import \{([^}]+)\} from "drizzle-orm";/);
+if (!drizzleImport) {
+  throw new Error("No se encontró el import de drizzle esperado.");
+}
+const drizzleNames = drizzleImport[1]
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+if (!drizzleNames.includes("and")) {
   source = source.replace(
-    'import { desc, eq } from "drizzle-orm";',
-    'import { and, desc, eq } from "drizzle-orm";',
+    drizzleImport[0],
+    `import { and, ${drizzleNames.join(", ")} } from "drizzle-orm";`,
   );
 }
 
@@ -71,16 +78,25 @@ if (!source.includes(handlerMarker)) {
     state.message = state.message.slice(0, 160);
     const nextState = JSON.stringify(state);
 
-    const updated = await getDb()
+    await getDb()
       .update(rooms)
       .set({ state: nextState, updatedAt: new Date().toISOString() })
-      .where(and(eq(rooms.code, roomCode), eq(rooms.state, row.state)))
-      .returning({ code: rooms.code });
+      .where(and(eq(rooms.code, roomCode), eq(rooms.state, row.state)));
 
-    if (updated.length)
+    // Drizzle/D1's normal UPDATE path is already used throughout this route.
+    // Confirm the compare-and-swap by reading the row back instead of relying
+    // on RETURNING support in the deployment adapter.
+    const [confirmed] = await getDb()
+      .select({ state: rooms.state })
+      .from(rooms)
+      .where(eq(rooms.code, roomCode))
+      .limit(1);
+
+    if (confirmed?.state === nextState)
       return Response.json({ state: publicState(state, playerId) });
 
-    // Someone else wrote first. Reload and merge this vote into that state.
+    // Someone else wrote first (or immediately after us). Reload and merge
+    // this player's vote into the newest state instead of restoring old data.
   }
 
   const latest = await load(roomCode);
@@ -118,10 +134,9 @@ if (!source.includes(postReplacement)) {
 }
 
 const required = [
-  'import { and, desc, eq } from "drizzle-orm";',
   "async function applyVoteAtomically(",
   "eq(rooms.state, row.state)",
-  ".returning({ code: rooms.code })",
+  "confirmed?.state === nextState",
   'if (action === "vote") {',
   "return applyVoteAtomically(",
 ];
