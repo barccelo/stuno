@@ -17,6 +17,16 @@ function replaceRequired(source, from, to, label) {
 await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
   source = replaceRequired(
     source,
+    "  const [visible, setVisible] = useState(false);",
+    [
+      "  const [visible, setVisible] = useState(false);",
+      "  const [noticeText, setNoticeText] = useState(\"¡Te toca!\");",
+    ].join("\n"),
+    "estado del texto aleatorio de turno",
+  );
+
+  source = replaceRequired(
+    source,
     [
       "    const show = () => {",
       "      positionOverPile();",
@@ -27,6 +37,17 @@ await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
     ].join("\n"),
     [
       "    const show = () => {",
+      "      const turnMessages = [",
+      "        \"¡Dale, mijx!\",",
+      "        \"¡Te tooca!\",",
+      "        \"¡Jugáá!\",",
+      "        \"¡Daaaale!\",",
+      "        \"¡Vais voss!\",",
+      "        \"¡Turno tuyoo!\",",
+      "        \"¡Dale guaya!\",",
+      "        \"¡Te toca!\",",
+      "      ];",
+      "      setNoticeText(turnMessages[Math.floor(Math.random() * turnMessages.length)]);",
       "      positionOverPile();",
       "      setVisible(true);",
       "      try {",
@@ -39,7 +60,7 @@ await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
       "      hideTimer.current = window.setTimeout(() => setVisible(false), 1250);",
       "    };",
     ].join("\n"),
-    "vibración y duración del aviso de turno",
+    "vibración, duración y texto aleatorio del aviso de turno",
   );
 
   source = replaceRequired(
@@ -61,7 +82,7 @@ await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
       "          aria-live=\"assertive\"",
       "          onPointerDown={() => setVisible(false)}",
       "        >",
-      "          <strong>¡Te toca!</strong>",
+      "          <strong>{noticeText}</strong>",
       "        </div>",
     ].join("\n"),
     "aviso de turno a pantalla completa",
