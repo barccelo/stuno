@@ -250,6 +250,116 @@ await patchFile("app/page.tsx", (source) => {
   return source;
 });
 
+await patchFile("app/VoteTimerWatcher.tsx", (source) => {
+  source = replaceRequired(
+    source,
+    "  useEffect(() => {\n    const renderTimer = () => {",
+    [
+      "  useEffect(() => {",
+      "    let voteBuzzTimer: number | null = null;",
+      "    let voteBuzzing = false;",
+      "",
+      "    const buzzOnce = () => {",
+      "      try {",
+      "        const vibrate = (navigator as Navigator & {",
+      "          vibrate?: (pattern: number | number[]) => boolean;",
+      "        }).vibrate;",
+      "        vibrate?.call(navigator, [105, 75, 105]);",
+      "      } catch {}",
+      "    };",
+      "",
+      "    const stopVoteBuzz = () => {",
+      "      if (voteBuzzTimer !== null) {",
+      "        window.clearInterval(voteBuzzTimer);",
+      "        voteBuzzTimer = null;",
+      "      }",
+      "      if (!voteBuzzing) return;",
+      "      voteBuzzing = false;",
+      "      try {",
+      "        const vibrate = (navigator as Navigator & {",
+      "          vibrate?: (pattern: number | number[]) => boolean;",
+      "        }).vibrate;",
+      "        vibrate?.call(navigator, 0);",
+      "      } catch {}",
+      "    };",
+      "",
+      "    const syncVoteBuzz = (shouldBuzz: boolean) => {",
+      "      if (!shouldBuzz) {",
+      "        stopVoteBuzz();",
+      "        return;",
+      "      }",
+      "      if (voteBuzzing) return;",
+      "      voteBuzzing = true;",
+      "      buzzOnce();",
+      "      voteBuzzTimer = window.setInterval(buzzOnce, 620);",
+      "    };",
+      "",
+      "    const onVotePointerDown = (event: PointerEvent) => {",
+      "      const target = event.target;",
+      "      if (!(target instanceof Element)) return;",
+      "      if (target.closest(\".vote-panel button\")) stopVoteBuzz();",
+      "    };",
+      "",
+      "    const renderTimer = () => {",
+    ].join("\n"),
+    "preparar patrón háptico repetido para votación",
+  );
+
+  source = replaceRequired(
+    source,
+    [
+      "      if (!panel) {",
+      "        existing?.remove();",
+      "        fallbackKey.current = \"\";",
+      "        fallbackExpiresAt.current = 0;",
+      "        return;",
+      "      }",
+    ].join("\n"),
+    [
+      "      if (!panel) {",
+      "        existing?.remove();",
+      "        fallbackKey.current = \"\";",
+      "        fallbackExpiresAt.current = 0;",
+      "        stopVoteBuzz();",
+      "        return;",
+      "      }",
+      "",
+      "      const awaitingLocalVote = Boolean(",
+      "        panel.querySelector(\"button.reject, button.approve\"),",
+      "      );",
+      "      panel.classList.toggle(\"vote-awaiting-local\", awaitingLocalVote);",
+      "      syncVoteBuzz(awaitingLocalVote);",
+    ].join("\n"),
+    "vibrar sólo mientras el jugador todavía debe votar",
+  );
+
+  source = replaceRequired(
+    source,
+    [
+      "    renderTimer();",
+      "    const timer = window.setInterval(renderTimer, 250);",
+      "    return () => {",
+      "      window.clearInterval(timer);",
+      "      document.querySelector(\".vote-countdown-watcher\")?.remove();",
+      "    };",
+    ].join("\n"),
+    [
+      "    document.addEventListener(\"pointerdown\", onVotePointerDown, true);",
+      "    renderTimer();",
+      "    const timer = window.setInterval(renderTimer, 250);",
+      "    return () => {",
+      "      window.clearInterval(timer);",
+      "      document.removeEventListener(\"pointerdown\", onVotePointerDown, true);",
+      "      stopVoteBuzz();",
+      "      document.querySelector(\".vote-countdown-watcher\")?.remove();",
+      "    };",
+    ].join("\n"),
+    "detener vibración inmediatamente al votar",
+  );
+
+  return source;
+});
+
 await patchFile("app/ui-fixes.css", (source) => {
   const marker = "/* Full-screen turn attention feedback. */";
   if (source.includes(marker)) return source;
@@ -355,4 +465,87 @@ ${marker}
   return source + css;
 });
 
-console.log("Turn attention feedback applied.");
+await patchFile("app/ui-fixes.css", (source) => {
+  const marker = "/* Full-screen vote attention feedback. */";
+  if (source.includes(marker)) return source;
+
+  return (
+    source +
+    `
+
+${marker}
+.vote-panel {
+  position: fixed !important;
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 2350 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  min-height: 100dvh !important;
+  transform: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  color: var(--ink, #14213d) !important;
+  padding: max(28px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow-y: auto !important;
+}
+.vote-panel > p,
+.vote-panel > .vote-panel-heading,
+.vote-panel > .vote-word,
+.vote-panel > div,
+.vote-panel > small {
+  width: min(520px, calc(100vw - 40px)) !important;
+  max-width: 520px !important;
+}
+.vote-panel > p {
+  margin-top: 0 !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: .02em;
+}
+.vote-panel .vote-word {
+  margin-top: 8px !important;
+  margin-bottom: 24px !important;
+}
+.vote-panel > div:last-of-type button,
+.vote-panel button.reject,
+.vote-panel button.approve {
+  min-height: 56px !important;
+  font-size: 15px !important;
+}
+.vote-panel.vote-awaiting-local::before {
+  content: "VOTA";
+  display: block;
+  margin-bottom: 14px;
+  color: var(--red, #ef5a4c);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: .24em;
+}
+@media (max-height: 520px) {
+  .vote-panel {
+    justify-content: flex-start !important;
+    padding-top: max(18px, env(safe-area-inset-top)) !important;
+    padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
+  }
+  .vote-panel.vote-awaiting-local::before {
+    margin-bottom: 8px;
+  }
+  .vote-panel .vote-word {
+    margin-bottom: 12px !important;
+  }
+}
+`
+  );
+});
+
+console.log("Turn and vote attention feedback applied.");
