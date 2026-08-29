@@ -61,7 +61,7 @@ await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
       "          aria-live=\"assertive\"",
       "          onPointerDown={() => setVisible(false)}",
       "        >",
-      "          <strong>Te toca</strong>",
+      "          <strong>¡Te toca!</strong>",
       "        </div>",
     ].join("\n"),
     "aviso de turno a pantalla completa",
@@ -112,14 +112,33 @@ ${marker}
   text-align: center;
 }
 
-/* The current player's name remains visibly alive for the whole turn. */
-.turn-board-player.active > span {
-  animation: currentTurnNameBlink .82s ease-in-out infinite;
-  transform-origin: center;
+/* The active player is emphasized with a strong pulsing border for the whole turn. */
+.turn-board-player.active {
+  animation: currentTurnBorderPulse .82s ease-in-out infinite !important;
+  will-change: box-shadow, border-color, filter;
 }
-@keyframes currentTurnNameBlink {
-  0%, 100% { opacity: 1; filter: brightness(1); }
-  50% { opacity: .34; filter: brightness(1.22); }
+.turn-board-player.active > span {
+  opacity: 1 !important;
+  filter: none !important;
+  animation: none !important;
+}
+@keyframes currentTurnBorderPulse {
+  0%, 100% {
+    border-color: rgba(244, 189, 59, .62);
+    box-shadow:
+      0 0 0 1px rgba(244, 189, 59, .2),
+      0 0 7px rgba(244, 189, 59, .18),
+      inset 0 0 0 1px rgba(255,255,255,.04);
+    filter: brightness(1);
+  }
+  50% {
+    border-color: #ffd45e;
+    box-shadow:
+      0 0 0 3px rgba(255, 212, 94, .7),
+      0 0 19px rgba(255, 199, 61, .72),
+      inset 0 0 12px rgba(255, 211, 92, .16);
+    filter: brightness(1.16);
+  }
 }
 @keyframes turnAttentionOverlay {
   0% { opacity: 0; }
@@ -137,12 +156,18 @@ ${marker}
     opacity: 1 !important;
     transform: none !important;
   }
+  .turn-board-player.active {
+    animation: none !important;
+    border-color: #ffd45e !important;
+    box-shadow:
+      0 0 0 3px rgba(255, 212, 94, .72),
+      0 0 15px rgba(255, 199, 61, .58) !important;
+    filter: brightness(1.1);
+  }
   .turn-board-player.active > span {
     animation: none !important;
     opacity: 1 !important;
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
-    text-underline-offset: 3px;
+    text-decoration: none;
   }
 }
 `;
