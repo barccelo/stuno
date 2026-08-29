@@ -14,45 +14,87 @@ function replaceRequired(source, from, to, label) {
   return source.replace(from, to);
 }
 
-await patchFile("lib/game.ts", (source) =>
-  replaceRequired(
+await patchFile("lib/game.ts", (source) => {
+  if (source.includes('turnNoticeMode?: "normal" | "random";')) return source;
+  if (source.includes("    startDelaySeconds: number;\n    categoryChangeCards?: number;\n")) {
+    return source.replace(
+      "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n",
+      "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n",
+    );
+  }
+  return replaceRequired(
     source,
     "    startDelaySeconds: number;\n    difficulty:",
     "    startDelaySeconds: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n    difficulty:",
     "tipar modalidad del aviso de turno",
-  ),
-);
+  );
+});
 
-await patchFile("app/api/rooms/route.ts", (source) =>
-  replaceRequired(
+await patchFile("app/api/rooms/route.ts", (source) => {
+  if (source.includes('turnNoticeMode: body.turnNoticeMode === "random" ? "random" : "normal",'))
+    return source;
+  if (source.includes('          categoryChangeCards,\n          difficulty: "mixed",')) {
+    return source.replace(
+      '          categoryChangeCards,\n          difficulty: "mixed",',
+      '          categoryChangeCards,\n          turnNoticeMode: body.turnNoticeMode === "random" ? "random" : "normal",\n          difficulty: "mixed",',
+    );
+  }
+  return replaceRequired(
     source,
     "          startDelaySeconds: Math.max(\n            3,\n            Math.min(10, Number(body.startDelaySeconds) || 5),\n          ),\n          difficulty: \"mixed\",",
     "          startDelaySeconds: Math.max(\n            3,\n            Math.min(10, Number(body.startDelaySeconds) || 5),\n          ),\n          turnNoticeMode: body.turnNoticeMode === \"random\" ? \"random\" : \"normal\",\n          difficulty: \"mixed\",",
     "guardar modalidad del aviso al crear sala",
-  ),
-);
+  );
+});
 
 await patchFile("app/page.tsx", (source) => {
-  source = replaceRequired(
-    source,
-    "    turnSeconds: number;\n    startDelaySeconds: number;\n  };",
-    "    turnSeconds: number;\n    startDelaySeconds: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n  };",
-    "tipar modalidad del aviso en cliente",
-  );
+  if (!source.includes('turnNoticeMode?: "normal" | "random";')) {
+    if (source.includes("    startDelaySeconds: number;\n    categoryChangeCards?: number;\n  };")) {
+      source = source.replace(
+        "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n  };",
+        "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n  };",
+      );
+    } else {
+      source = replaceRequired(
+        source,
+        "    turnSeconds: number;\n    startDelaySeconds: number;\n  };",
+        "    turnSeconds: number;\n    startDelaySeconds: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n  };",
+        "tipar modalidad del aviso en cliente",
+      );
+    }
+  }
 
-  source = replaceRequired(
-    source,
-    "  const [startDelay, setStartDelay] = useState(5);\n  const [name, setName] = useState(\"\");",
-    "  const [startDelay, setStartDelay] = useState(5);\n  const [turnNoticeMode, setTurnNoticeMode] = useState<\"normal\" | \"random\">(\"normal\");\n  const [name, setName] = useState(\"\");",
-    "estado local de modalidad del aviso",
-  );
+  if (!source.includes("const [turnNoticeMode, setTurnNoticeMode]")) {
+    if (source.includes("  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n")) {
+      source = source.replace(
+        "  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n",
+        "  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n  const [turnNoticeMode, setTurnNoticeMode] = useState<\"normal\" | \"random\">(\"normal\");\n",
+      );
+    } else {
+      source = replaceRequired(
+        source,
+        "  const [startDelay, setStartDelay] = useState(5);\n  const [name, setName] = useState(\"\");",
+        "  const [startDelay, setStartDelay] = useState(5);\n  const [turnNoticeMode, setTurnNoticeMode] = useState<\"normal\" | \"random\">(\"normal\");\n  const [name, setName] = useState(\"\");",
+        "estado local de modalidad del aviso",
+      );
+    }
+  }
 
-  source = replaceRequired(
-    source,
-    "      turnSeconds: seconds,\n      startDelaySeconds: startDelay,\n      categories: custom,",
-    "      turnSeconds: seconds,\n      startDelaySeconds: startDelay,\n      turnNoticeMode,\n      categories: custom,",
-    "enviar modalidad al crear sala",
-  );
+  if (!source.includes("      turnNoticeMode,\n")) {
+    if (source.includes("      startDelaySeconds: startDelay,\n      categoryChangeCards,\n")) {
+      source = source.replace(
+        "      startDelaySeconds: startDelay,\n      categoryChangeCards,\n",
+        "      startDelaySeconds: startDelay,\n      categoryChangeCards,\n      turnNoticeMode,\n",
+      );
+    } else {
+      source = replaceRequired(
+        source,
+        "      turnSeconds: seconds,\n      startDelaySeconds: startDelay,\n      categories: custom,",
+        "      turnSeconds: seconds,\n      startDelaySeconds: startDelay,\n      turnNoticeMode,\n      categories: custom,",
+        "enviar modalidad al crear sala",
+      );
+    }
+  }
 
   source = replaceRequired(
     source,
