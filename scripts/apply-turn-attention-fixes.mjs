@@ -54,13 +54,17 @@ await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
       "        const vibrate = (navigator as Navigator & {",
       "          vibrate?: (pattern: number | number[]) => boolean;",
       "        }).vibrate;",
-      "        vibrate?.call(navigator, 110);",
+      "        vibrate?.call(navigator, 220);",
       "      } catch {}",
       "      if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);",
-      "      hideTimer.current = window.setTimeout(() => setVisible(false), 1250);",
+      "      hideTimer.current = window.setTimeout(() => {",
+      "        hideTimer.current = null;",
+      "        setVisible(false);",
+      "        window.dispatchEvent(new CustomEvent(\"stuno-turn-ready\"));",
+      "      }, 1250);",
       "    };",
     ].join("\n"),
-    "vibración, duración y texto aleatorio del aviso de turno",
+    "vibración, duración y liberación del contador de turno",
   );
 
   source = replaceRequired(
@@ -80,12 +84,167 @@ await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
       "          className=\"turn-notice-fallback turn-attention-overlay\"",
       "          role=\"alert\"",
       "          aria-live=\"assertive\"",
-      "          onPointerDown={() => setVisible(false)}",
+      "          onPointerDown={() => {",
+      "            if (hideTimer.current !== null) {",
+      "              window.clearTimeout(hideTimer.current);",
+      "              hideTimer.current = null;",
+      "            }",
+      "            setVisible(false);",
+      "            window.dispatchEvent(new CustomEvent(\"stuno-turn-ready\"));",
+      "          }}",
       "        >",
       "          <strong>{noticeText}</strong>",
       "        </div>",
     ].join("\n"),
-    "aviso de turno a pantalla completa",
+    "aviso de turno a pantalla completa y clic para iniciar",
+  );
+
+  return source;
+});
+
+await patchFile("lib/game.ts", (source) =>
+  replaceRequired(
+    source,
+    "  state.turnStartedAt = Date.now();\n  state.turnsInRound = (state.turnsInRound ?? 0) + extra;",
+    "  state.turnStartedAt =\n    state.settings.mode === \"classic\" ? Date.now() + 3500 : Date.now();\n  state.turnsInRound = (state.turnsInRound ?? 0) + extra;",
+    "dar margen al aviso antes de iniciar el siguiente turno",
+  ),
+);
+
+await patchFile("app/api/rooms/route.ts", (source) => {
+  source = replaceRequired(
+    source,
+    "  state.turnStartedAt = Date.now();\n  state.message = state.currentCategory",
+    "  state.turnStartedAt =\n    state.settings.mode === \"classic\" && state.currentCategory\n      ? Date.now() + 3500\n      : Date.now();\n  state.message = state.currentCategory",
+    "retrasar inicio del primer turno hasta después del aviso",
+  );
+
+  source = replaceRequired(
+    source,
+    "      if (chosenAfterSpecial && state.settings.mode === \"classic\")\n        nextIndex(state);\n      else state.turnStartedAt = Date.now();",
+    "      if (chosenAfterSpecial && state.settings.mode === \"classic\")\n        nextIndex(state);\n      else\n        state.turnStartedAt =\n          state.settings.mode === \"classic\" ? Date.now() + 3500 : Date.now();",
+    "retrasar contador después de elegir categoría",
+  );
+
+  source = replaceRequired(
+    source,
+    "    } else if (action === \"togglePause\") {",
+    [
+      "    } else if (action === \"readyTurn\") {",
+      "      if (",
+      "        state.status !== \"playing\" ||",
+      "        state.pausedAt ||",
+      "        state.settings.mode !== \"classic\" ||",
+      "        state.players[state.turnIndex]?.id !== playerId",
+      "      )",
+      "        return Response.json({ state: publicState(state, playerId) });",
+      "      if (state.turnStartedAt > Date.now()) state.turnStartedAt = Date.now();",
+      "    } else if (action === \"togglePause\") {",
+    ].join("\n"),
+    "acción para iniciar el contador al cerrar el aviso",
+  );
+
+  return source;
+});
+
+await patchFile("app/page.tsx", (source) => {
+  source = replaceRequired(
+    source,
+    [
+      "  const remaining =",
+      "    room?.status === \"playing\"",
+      "      ? Math.max(",
+      "          0,",
+      "          Math.ceil(",
+      "            (room.settings.turnSeconds * 1000 -",
+      "              ((room.pausedAt ?? now) - room.turnStartedAt)) /",
+      "              1000,",
+      "          ),",
+      "        )",
+      "      : (room?.settings.turnSeconds ?? seconds);",
+    ].join("\n"),
+    [
+      "  const remaining =",
+      "    room?.status === \"playing\"",
+      "      ? Math.min(",
+      "          room.settings.turnSeconds,",
+      "          Math.max(",
+      "            0,",
+      "            Math.ceil(",
+      "              (room.settings.turnSeconds * 1000 -",
+      "                ((room.pausedAt ?? now) - room.turnStartedAt)) /",
+      "                1000,",
+      "            ),",
+      "          ),",
+      "        )",
+      "      : (room?.settings.turnSeconds ?? seconds);",
+    ].join("\n"),
+    "mantener el contador lleno mientras está visible el aviso",
+  );
+
+  source = replaceRequired(
+    source,
+    [
+      "  useEffect(() => {",
+      "    if (room?.pendingLive && now >= room.pendingLive.expiresAt)",
+      "      void act(\"finalizeLive\");",
+      "  }, [now, room?.pendingLive?.expiresAt]);",
+    ].join("\n"),
+    [
+      "  useEffect(() => {",
+      "    const ready = () => {",
+      "      const currentTurnId = room?.players[room.turnIndex]?.id;",
+      "      if (",
+      "        room?.status !== \"playing\" ||",
+      "        room.pausedAt ||",
+      "        room.settings.mode !== \"classic\" ||",
+      "        currentTurnId !== playerId",
+      "      )",
+      "        return;",
+      "      void act(\"readyTurn\");",
+      "    };",
+      "    window.addEventListener(\"stuno-turn-ready\", ready);",
+      "    return () => window.removeEventListener(\"stuno-turn-ready\", ready);",
+      "  }, [",
+      "    room?.status,",
+      "    room?.pausedAt,",
+      "    room?.settings.mode,",
+      "    room?.turnIndex,",
+      "    room?.turnStartedAt,",
+      "    playerId,",
+      "  ]);",
+      "  useEffect(() => {",
+      "    if (room?.pendingLive && now >= room.pendingLive.expiresAt)",
+      "      void act(\"finalizeLive\");",
+      "  }, [now, room?.pendingLive?.expiresAt]);",
+    ].join("\n"),
+    "iniciar turno al cerrar el aviso",
+  );
+
+  source = replaceRequired(
+    source,
+    [
+      "      const currentTurnId = room.players[room.turnIndex]?.id ?? \"\";",
+      "      return currentTurnId === playerId ? 2600 : 1900;",
+    ].join("\n"),
+    [
+      "      const currentTurnId = room.players[room.turnIndex]?.id ?? \"\";",
+      "      const playerCount = room.players.length;",
+      "      const nextTurnIndex = playerCount",
+      "        ? (room.turnIndex + room.direction + playerCount) % playerCount",
+      "        : -1;",
+      "      const nextTurnId = nextTurnIndex >= 0 ? room.players[nextTurnIndex]?.id ?? \"\" : \"\";",
+      "      if (nextTurnId === playerId) return 900;",
+      "      return currentTurnId === playerId ? 2600 : 1400;",
+    ].join("\n"),
+    "acelerar polling del próximo jugador",
+  );
+
+  source = replaceRequired(
+    source,
+    "    room?.turnIndex,\n    room?.settings.mode,",
+    "    room?.turnIndex,\n    room?.direction,\n    room?.settings.mode,",
+    "actualizar polling al cambiar dirección",
   );
 
   return source;
