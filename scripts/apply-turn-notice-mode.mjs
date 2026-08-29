@@ -6,164 +6,171 @@ async function patchFile(path, transform) {
   if (after !== before) await writeFile(path, after, "utf8");
 }
 
-function replaceRequired(source, from, to, label) {
-  if (source.includes(to)) return source;
-  if (!source.includes(from)) {
-    throw new Error(`No se encontró el bloque esperado para: ${label}`);
-  }
-  return source.replace(from, to);
+function insertAfter(source, anchor, addition, label) {
+  if (source.includes(addition.trim())) return source;
+  if (!source.includes(anchor)) throw new Error(`No se encontró: ${label}`);
+  return source.replace(anchor, anchor + addition);
 }
 
 await patchFile("lib/game.ts", (source) => {
   if (source.includes('turnNoticeMode?: "normal" | "random";')) return source;
-  if (source.includes("    startDelaySeconds: number;\n    categoryChangeCards?: number;\n")) {
+  const categoryAnchor = "    categoryChangeCards?: number;\n";
+  if (source.includes(categoryAnchor))
     return source.replace(
-      "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n",
-      "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n",
+      categoryAnchor,
+      categoryAnchor + '    turnNoticeMode?: "normal" | "random";\n',
     );
-  }
-  return replaceRequired(
+  return insertAfter(
     source,
-    "    startDelaySeconds: number;\n    difficulty:",
-    "    startDelaySeconds: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n    difficulty:",
-    "tipar modalidad del aviso de turno",
+    "    startDelaySeconds: number;\n",
+    '    turnNoticeMode?: "normal" | "random";\n',
+    "tipo de modalidad del aviso",
   );
 });
 
 await patchFile("app/api/rooms/route.ts", (source) => {
   if (source.includes('turnNoticeMode: body.turnNoticeMode === "random" ? "random" : "normal",'))
     return source;
-  if (source.includes('          categoryChangeCards,\n          difficulty: "mixed",')) {
-    return source.replace(
-      '          categoryChangeCards,\n          difficulty: "mixed",',
-      '          categoryChangeCards,\n          turnNoticeMode: body.turnNoticeMode === "random" ? "random" : "normal",\n          difficulty: "mixed",',
-    );
-  }
-  return replaceRequired(
-    source,
-    "          startDelaySeconds: Math.max(\n            3,\n            Math.min(10, Number(body.startDelaySeconds) || 5),\n          ),\n          difficulty: \"mixed\",",
-    "          startDelaySeconds: Math.max(\n            3,\n            Math.min(10, Number(body.startDelaySeconds) || 5),\n          ),\n          turnNoticeMode: body.turnNoticeMode === \"random\" ? \"random\" : \"normal\",\n          difficulty: \"mixed\",",
-    "guardar modalidad del aviso al crear sala",
+  const difficulty = '          difficulty: "mixed",';
+  if (!source.includes(difficulty))
+    throw new Error("No se encontró settings.difficulty para guardar el aviso.");
+  return source.replace(
+    difficulty,
+    '          turnNoticeMode: body.turnNoticeMode === "random" ? "random" : "normal",\n' + difficulty,
   );
 });
 
 await patchFile("app/page.tsx", (source) => {
   if (!source.includes('turnNoticeMode?: "normal" | "random";')) {
-    if (source.includes("    startDelaySeconds: number;\n    categoryChangeCards?: number;\n  };")) {
+    const settingsStart = source.indexOf("  settings: {");
+    const settingsEnd = settingsStart >= 0 ? source.indexOf("  };", settingsStart) : -1;
+    if (settingsStart < 0 || settingsEnd < 0)
+      throw new Error("No se encontró el tipo Room.settings.");
+    const block = source.slice(settingsStart, settingsEnd);
+    if (block.includes("    categoryChangeCards?: number;")) {
       source = source.replace(
-        "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n  };",
-        "    startDelaySeconds: number;\n    categoryChangeCards?: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n  };",
+        "    categoryChangeCards?: number;\n",
+        '    categoryChangeCards?: number;\n    turnNoticeMode?: "normal" | "random";\n',
+      );
+    } else if (block.includes("    startDelaySeconds: number;")) {
+      source = source.replace(
+        "    startDelaySeconds: number;\n",
+        '    startDelaySeconds: number;\n    turnNoticeMode?: "normal" | "random";\n',
       );
     } else {
-      source = replaceRequired(
-        source,
-        "    turnSeconds: number;\n    startDelaySeconds: number;\n  };",
-        "    turnSeconds: number;\n    startDelaySeconds: number;\n    turnNoticeMode?: \"normal\" | \"random\";\n  };",
-        "tipar modalidad del aviso en cliente",
-      );
+      throw new Error("No se encontró el ancla para Room.settings.turnNoticeMode.");
     }
   }
 
   if (!source.includes("const [turnNoticeMode, setTurnNoticeMode]")) {
-    if (source.includes("  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n")) {
+    const categoryState = "  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n";
+    const delayState = "  const [startDelay, setStartDelay] = useState(5);\n";
+    if (source.includes(categoryState)) {
       source = source.replace(
-        "  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n",
-        "  const [categoryChangeCards, setCategoryChangeCards] = useState(10);\n  const [turnNoticeMode, setTurnNoticeMode] = useState<\"normal\" | \"random\">(\"normal\");\n",
+        categoryState,
+        categoryState + '  const [turnNoticeMode, setTurnNoticeMode] = useState<"normal" | "random">("normal");\n',
+      );
+    } else if (source.includes(delayState)) {
+      source = source.replace(
+        delayState,
+        delayState + '  const [turnNoticeMode, setTurnNoticeMode] = useState<"normal" | "random">("normal");\n',
       );
     } else {
-      source = replaceRequired(
-        source,
-        "  const [startDelay, setStartDelay] = useState(5);\n  const [name, setName] = useState(\"\");",
-        "  const [startDelay, setStartDelay] = useState(5);\n  const [turnNoticeMode, setTurnNoticeMode] = useState<\"normal\" | \"random\">(\"normal\");\n  const [name, setName] = useState(\"\");",
-        "estado local de modalidad del aviso",
-      );
+      throw new Error("No se encontró el estado de preparación para añadir turnNoticeMode.");
     }
   }
 
   if (!source.includes("      turnNoticeMode,\n")) {
-    if (source.includes("      startDelaySeconds: startDelay,\n      categoryChangeCards,\n")) {
-      source = source.replace(
-        "      startDelaySeconds: startDelay,\n      categoryChangeCards,\n",
-        "      startDelaySeconds: startDelay,\n      categoryChangeCards,\n      turnNoticeMode,\n",
-      );
-    } else {
-      source = replaceRequired(
-        source,
-        "      turnSeconds: seconds,\n      startDelaySeconds: startDelay,\n      categories: custom,",
-        "      turnSeconds: seconds,\n      startDelaySeconds: startDelay,\n      turnNoticeMode,\n      categories: custom,",
-        "enviar modalidad al crear sala",
-      );
-    }
+    const categoryPayload = "      categoryChangeCards,\n";
+    const delayPayload = "      startDelaySeconds: startDelay,\n";
+    if (source.includes(categoryPayload))
+      source = source.replace(categoryPayload, categoryPayload + "      turnNoticeMode,\n");
+    else if (source.includes(delayPayload))
+      source = source.replace(delayPayload, delayPayload + "      turnNoticeMode,\n");
+    else throw new Error("No se encontró el payload de creación para turnNoticeMode.");
   }
 
-  source = replaceRequired(
-    source,
-    "      <main className=\"game-shell\" onPointerDown={dismissSelectionFromBackground}>",
-    "      <main\n        className=\"game-shell\"\n        data-turn-notice-mode={room.settings.turnNoticeMode ?? \"normal\"}\n        onPointerDown={dismissSelectionFromBackground}\n      >",
-    "exponer modalidad al aviso visual",
-  );
+  if (!source.includes("data-turn-notice-mode=")) {
+    const mainAnchor = '<main className="game-shell"';
+    if (!source.includes(mainAnchor))
+      throw new Error("No se encontró game-shell para exponer la modalidad.");
+    source = source.replace(
+      mainAnchor,
+      '<main className="game-shell" data-turn-notice-mode={room.settings.turnNoticeMode ?? "normal"}',
+    );
+  }
 
-  source = replaceRequired(
-    source,
-    "                </fieldset>\n              </div>\n              <aside className=\"setup-aside\">",
-    [
-      "                </fieldset>",
+  if (!source.includes('aria-label="Aviso de turno"')) {
+    const asideAnchor = '              <aside className="setup-aside">';
+    const asideIndex = source.lastIndexOf(asideAnchor);
+    if (asideIndex < 0) throw new Error("No se encontró setup-aside para el selector de aviso.");
+    const beforeAside = source.slice(0, asideIndex);
+    const closeIndex = beforeAside.lastIndexOf("              </div>\n");
+    if (closeIndex < 0) throw new Error("No se encontró el cierre de setup-main.");
+    const selector = [
       "                <fieldset>",
       "                  <legend>Aviso de turno</legend>",
-      "                  <div className=\"segmented\" role=\"group\" aria-label=\"Aviso de turno\">",
+      '                  <div className="segmented" role="group" aria-label="Aviso de turno">',
       "                    <button",
-      "                      type=\"button\"",
-      "                      className={turnNoticeMode === \"normal\" ? \"active\" : \"\"}",
-      "                      onClick={() => setTurnNoticeMode(\"normal\")}",
+      '                      type="button"',
+      '                      className={turnNoticeMode === "normal" ? "active" : ""}',
+      '                      onClick={() => setTurnNoticeMode("normal")}',
       "                    >",
       "                      ¡Te toca!",
       "                    </button>",
       "                    <button",
-      "                      type=\"button\"",
-      "                      className={turnNoticeMode === \"random\" ? \"active\" : \"\"}",
-      "                      onClick={() => setTurnNoticeMode(\"random\")}",
+      '                      type="button"',
+      '                      className={turnNoticeMode === "random" ? "active" : ""}',
+      '                      onClick={() => setTurnNoticeMode("random")}',
       "                    >",
       "                      Mensajes random",
       "                    </button>",
       "                  </div>",
-      "                  <p className=\"hint\">",
-      "                    {turnNoticeMode === \"normal\"",
-      "                      ? \"Siempre muestra «¡Te toca!».\"",
-      "                      : \"Alterna aleatoriamente entre los mensajes especiales.\"}",
+      '                  <p className="hint">',
+      '                    {turnNoticeMode === "normal"',
+      '                      ? "Siempre muestra «¡Te toca!»."',
+      '                      : "Alterna aleatoriamente entre los mensajes especiales."}',
       "                  </p>",
       "                </fieldset>",
-      "              </div>",
-      "              <aside className=\"setup-aside\">",
-    ].join("\n"),
-    "selector de modalidad antes de crear la partida",
-  );
+    ].join("\n") + "\n";
+    source = source.slice(0, closeIndex) + selector + source.slice(closeIndex);
+  }
 
-  source = replaceRequired(
-    source,
-    "                  <p>\n                    <span>Formato</span>\n                    <b>{playStyle === \"online\" ? \"En línea\" : \"En vivo\"}</b>\n                  </p>\n                  <p>\n                    <span>Categorías</span>",
-    "                  <p>\n                    <span>Formato</span>\n                    <b>{playStyle === \"online\" ? \"En línea\" : \"En vivo\"}</b>\n                  </p>\n                  <p>\n                    <span>Aviso de turno</span>\n                    <b>{turnNoticeMode === \"normal\" ? \"¡Te toca!\" : \"Random\"}</b>\n                  </p>\n                  <p>\n                    <span>Categorías</span>",
-    "resumen de modalidad del aviso",
-  );
+  if (!source.includes("<span>Aviso de turno</span>")) {
+    const categoriesSummary = "                  <p>\n                    <span>Categorías</span>";
+    if (!source.includes(categoriesSummary))
+      throw new Error("No se encontró el resumen de categorías para añadir el aviso.");
+    const summary = [
+      "                  <p>",
+      "                    <span>Aviso de turno</span>",
+      '                    <b>{turnNoticeMode === "normal" ? "¡Te toca!" : "Random"}</b>',
+      "                  </p>",
+      "",
+    ].join("\n");
+    source = source.replace(categoriesSummary, summary + categoriesSummary);
+  }
 
   return source;
 });
 
-await patchFile("app/TurnNoticeWatcher.tsx", (source) =>
-  replaceRequired(
-    source,
-    "      setNoticeText(turnMessages[Math.floor(Math.random() * turnMessages.length)]);",
+await patchFile("app/TurnNoticeWatcher.tsx", (source) => {
+  if (source.includes("const noticeMode =")) return source;
+  const randomLine = "      setNoticeText(turnMessages[Math.floor(Math.random() * turnMessages.length)]);";
+  if (!source.includes(randomLine))
+    throw new Error("No se encontró la selección random del aviso de turno.");
+  return source.replace(
+    randomLine,
     [
       "      const noticeMode =",
-      "        document.querySelector<HTMLElement>(\".game-shell\")?.dataset.turnNoticeMode ??",
-      "        \"normal\";",
+      '        document.querySelector<HTMLElement>(".game-shell")?.dataset.turnNoticeMode ??',
+      '        "normal";',
       "      setNoticeText(",
-      "        noticeMode === \"random\"",
+      '        noticeMode === "random"',
       "          ? turnMessages[Math.floor(Math.random() * turnMessages.length)]",
-      "          : \"¡Te toca!\",",
+      '          : "¡Te toca!",',
       "      );",
     ].join("\n"),
-    "usar modalidad normal o aleatoria en el aviso",
-  ),
-);
+  );
+});
 
 console.log("Selectable turn notice mode applied.");
