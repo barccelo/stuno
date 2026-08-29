@@ -12,8 +12,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Inspect transformed card helpers
-        run: |
-          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("package.json","utf8")); p.scripts.prebuild=p.scripts.prebuild.replace(" && node scripts/apply-power-cards.mjs",""); fs.writeFileSync("package.json",JSON.stringify(p,null,2));'
-          npm run prebuild
-          grep -n -A55 -B8 "function cardClass" app/page.tsx
+      - run: npm ci --progress=false
+      - run: npm run build
