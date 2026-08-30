@@ -193,4 +193,38 @@ if (!css.includes("/* COMBO badge placement v5. */")) {
 `;
 }
 
+if (!css.includes("/* COMBO badge clearance v6. */")) {
+  css += `
+
+/* COMBO badge clearance v6. */
+.combo-picker-tap .combo-letter-choice {
+  overflow: visible !important;
+}
+.combo-picker-tap .combo-letter-choice strong {
+  font-size: 26px !important;
+}
+.combo-picker-tap .combo-letter-choice em {
+  top: -5px !important;
+  right: -5px !important;
+  width: 21px !important;
+  height: 21px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,.18) !important;
+}
+@media (max-height: 720px) {
+  .combo-picker-tap .combo-letter-choice strong {
+    font-size: 24px !important;
+  }
+  .combo-picker-tap .combo-letter-choice em {
+    top: -4px !important;
+    right: -4px !important;
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 9px !important;
+  }
+}
+`;
+}
+
 await writeFile(path, css, "utf8");
