@@ -177,6 +177,20 @@ if (!css.includes("/* COMBO tap-selection UI v2. */")) {
   cursor: pointer !important;
   transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease, opacity .12s ease !important;
 }
+.combo-picker-tap .combo-letter-choice strong {
+  position: relative !important;
+  z-index: 2 !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #17324a !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  font: 700 31px/1 Georgia, serif !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
+  -webkit-text-fill-color: #17324a !important;
+}
 .combo-picker-tap .combo-letter-choice:disabled {
   opacity: .42 !important;
   cursor: default !important;
@@ -205,7 +219,8 @@ if (!css.includes("/* COMBO tap-selection UI v2. */")) {
   grid-template-columns: minmax(0, 1fr) 36px !important;
   align-items: center !important;
   gap: 8px !important;
-  margin-top: 2px !important;
+  margin-top: 6px !important;
+  margin-bottom: 2px !important;
 }
 .combo-formed-word {
   min-width: 0 !important;
@@ -238,13 +253,14 @@ if (!css.includes("/* COMBO tap-selection UI v2. */")) {
   opacity: .35 !important;
 }
 .combo-picker-tap .combo-count {
-  margin: -1px 0 1px !important;
+  margin: 6px 0 10px !important;
+  min-height: 15px !important;
   text-align: center !important;
-  font-size: 11px !important;
-  line-height: 1.1 !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
 }
 .combo-actions {
-  margin-top: 2px !important;
+  margin-top: 0 !important;
 }
 @media (max-height: 720px) {
   .combo-picker-tap {
@@ -262,9 +278,15 @@ if (!css.includes("/* COMBO tap-selection UI v2. */")) {
   .combo-picker-tap .combo-letter-choice strong {
     font-size: 27px !important;
   }
+  .combo-word-row {
+    margin-top: 4px !important;
+  }
   .combo-formed-word {
     min-height: 34px !important;
     font-size: 20px !important;
+  }
+  .combo-picker-tap .combo-count {
+    margin: 5px 0 7px !important;
   }
 }
 `;
