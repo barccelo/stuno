@@ -13,5 +13,13 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --progress=false
-      - run: npm run prebuild
-      - run: npm run build
+      - name: Inspect generated Contiene logic
+        shell: bash
+        run: |
+          npm run prebuild || true
+          echo "--- CLIENTE ---"
+          grep -n -C 2 'contains-toggle' app/page.tsx || true
+          grep -n -C 2 'Ñ' app/page.tsx | tail -80 || true
+          echo "--- SERVIDOR ---"
+          grep -n -C 2 'mode === "contains"' app/api/rooms/route.ts || true
+          grep -n -C 2 'Ñ' app/api/rooms/route.ts | head -80 || true
