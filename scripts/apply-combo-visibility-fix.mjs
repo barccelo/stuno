@@ -132,4 +132,65 @@ if (!css.includes("/* COMBO visual restoration v4. */")) {
 `;
 }
 
+if (!css.includes("/* COMBO badge placement v5. */")) {
+  css += `
+
+/* COMBO badge placement v5. */
+.combo-picker-tap .combo-letter-choice {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.combo-picker-tap .combo-letter-choice strong {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  pointer-events: none !important;
+}
+.combo-picker-tap .combo-letter-choice em {
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 6 !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: grid !important;
+  place-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  font: 900 11px/1 Arial, sans-serif !important;
+  transform: none !important;
+  pointer-events: none !important;
+}
+.combo-picker-tap .combo-order-badge {
+  top: 5px !important;
+  left: 5px !important;
+  right: auto !important;
+  z-index: 7 !important;
+}
+@media (max-height: 720px) {
+  .combo-picker-tap .combo-letter-choice strong {
+    font-size: 27px !important;
+  }
+  .combo-picker-tap .combo-letter-choice em {
+    top: 4px !important;
+    right: 4px !important;
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 10px !important;
+  }
+}
+`;
+}
+
 await writeFile(path, css, "utf8");
