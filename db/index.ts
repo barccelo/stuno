@@ -12,7 +12,9 @@ function getD1() {
   return env.DB;
 }
 
-export async function ensureSchema() {
+let schemaPromise: Promise<void> | null = null;
+
+async function initializeSchema() {
   const d1 = getD1();
   await d1.batch([
     d1.prepare(`CREATE TABLE IF NOT EXISTS rooms (
@@ -20,6 +22,8 @@ export async function ensureSchema() {
       state TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`),
+    d1.prepare(`CREATE INDEX IF NOT EXISTS rooms_updated_at_idx
+      ON rooms (updated_at)`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS category_cards (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
       title TEXT NOT NULL DEFAULT '',
@@ -71,6 +75,16 @@ export async function ensureSchema() {
       if (!String(error).toLocaleLowerCase().includes("duplicate column")) throw error;
     }
   }
+}
+
+export async function ensureSchema() {
+  if (!schemaPromise) {
+    schemaPromise = initializeSchema().catch((error) => {
+      schemaPromise = null;
+      throw error;
+    });
+  }
+  await schemaPromise;
 }
 
 export function getDb() {
