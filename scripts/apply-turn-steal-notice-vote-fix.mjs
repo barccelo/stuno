@@ -24,14 +24,26 @@ if (!game.includes("turnStealVictimId?: string;")) {
 
 let route = await readFile("app/api/rooms/route.ts", "utf8");
 
-if (!route.includes("let confirmedTurnStealVictimId: string | null = null;")) {
-  route = replaceOnce(
-    route,
-    /(\s+const actor = player\(state, playerId\);)/,
-    `$1\n    let confirmedTurnStealVictimId: string | null = null;\n    let confirmedTurnStealLabel: string | null = null;`,
-    "preparar evento confirmado de Robar turno",
-  );
-}
+// TURN STEAL scope fix v4.
+// Several helper functions also contain `const actor = player(state, playerId)`.
+// Remove declarations from any previous bad placement and insert them only in
+// the POST request scope, where the confirmed play and final save are handled.
+route = route.replace(
+  /\n\s*let confirmedTurnStealVictimId: string \| null = null;\n\s*let confirmedTurnStealLabel: string \| null = null;/g,
+  "",
+);
+const postActorAnchor = [
+  '    const playerId = String(body.playerId ?? "");',
+  '    const actor = player(state, playerId);',
+].join("\n");
+const postActorReplacement = [
+  postActorAnchor,
+  '    let confirmedTurnStealVictimId: string | null = null;',
+  '    let confirmedTurnStealLabel: string | null = null;',
+].join("\n");
+if (!route.includes(postActorAnchor))
+  throw new Error("No se encontró playerId + actor dentro de POST para Robar turno.");
+route = route.replace(postActorAnchor, postActorReplacement);
 
 if (!route.includes("confirmedTurnStealVictimId = armed.stolenFromId ?? null;")) {
   const guardPattern = /(if \(state\.settings\.mode === "classic" && state\.settings\.turnStealEnabled !== false\) \{\s*const armed = state\.armedTurnPlay;\s*if \(!armed \|\| armed\.playerId !== playerId \|\| armed\.cardId !== cardId \|\| !armed\.committed\)\s*return Response\.json\(\{ error: "La jugada cambió antes de confirmarse" \}, \{ status: 409 \}\);\s*)(state\.armedTurnPlay = null;)/m;
@@ -84,6 +96,13 @@ if (!route.includes(confirmedMarker)) {
   const eventBlock = `    ${confirmedMarker}\n    if (action === "play" && confirmedTurnStealVictimId && actor) {\n      if (state.pendingVote?.playerId === playerId) {\n        const impartialVoters = state.players.filter(\n          (item) =>\n            item.id !== playerId &&\n            item.id !== confirmedTurnStealVictimId,\n        );\n        if (impartialVoters.length === 0) resolveVote(state, true);\n      }\n      const stolenFrom = state.players.find((item) => item.id === confirmedTurnStealVictimId);\n      state.lastEvent = {\n        kind: "turn-steal",\n        actorId: actor.id,\n        actorName: actor.name,\n        targets: stolenFrom ? [{ id: stolenFrom.id, name: stolenFrom.name }] : [],\n        label: confirmedTurnStealLabel ?? state.lastPlay?.label ?? "?",\n        global: true,\n        at: Date.now(),\n      };\n    }\n`;
   route = route.slice(0, finalSave) + eventBlock + route.slice(finalSave);
 }
+
+// Verify the declaration really lives in POST and occurs before its uses.
+const postIndex = route.indexOf("export async function POST(request: Request)");
+const declarationIndex = route.indexOf("let confirmedTurnStealVictimId: string | null = null;");
+const finalUseIndex = route.lastIndexOf("action === \"play\" && confirmedTurnStealVictimId");
+if (postIndex < 0 || declarationIndex < postIndex || finalUseIndex < declarationIndex)
+  throw new Error("Scope de Robar turno inválido: la variable confirmada no quedó dentro de POST.");
 
 await writeFile("app/api/rooms/route.ts", route, "utf8");
 
