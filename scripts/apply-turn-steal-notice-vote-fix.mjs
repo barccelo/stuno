@@ -73,30 +73,15 @@ if (!route.includes("state.players.length - 1 - (pending.turnStealVictimId ? 1 :
   );
 }
 
-// With two players, actor + victim leaves no impartial voter. Approve directly.
-if (!route.includes("const impartialVoters = state.players.filter(")) {
-  // Earlier patches may add expiresAt or other fields to pendingVote. Match the
-  // assignment by meaning instead of requiring one exact object literal.
-  const pendingVoteAssignment = /(\s+state\.pendingVote\s*=\s*\{[\s\S]*?\.\.\.submission[\s\S]*?votes\s*:\s*\{\}[\s\S]*?\};)(\s+state\.message\s*=\s*`Respuesta de \$\{actor!\.name\}: “\$\{answer\}”`;)/m;
-  if (!pendingVoteAssignment.test(route)) {
-    const diagnostic = route.match(/state\.pendingVote\s*=\s*\{[\s\S]{0,500}?\};/m)?.[0];
-    throw new Error(
-      "No se encontró la creación de pendingVote para resolver sin votantes imparciales." +
-        (diagnostic ? ` Bloque cercano: ${diagnostic.slice(0, 650)}` : ""),
-    );
-  }
-  route = route.replace(
-    pendingVoteAssignment,
-    `$1\n          const impartialVoters = state.players.filter(\n            (item) =>\n              item.id !== playerId &&\n              item.id !== submission.turnStealVictimId,\n          );\n          if (submission.turnStealVictimId && impartialVoters.length === 0)\n            resolveVote(state, true);\n          else$2`,
-  );
-}
-
 // Re-create the event at the end of the confirmed play, immediately before save.
+// This is also the stable place to resolve a stolen-turn vote when there are no
+// impartial voters (for example, a two-player game). It avoids depending on the
+// exact pendingVote object literal produced by earlier build patches.
 const finalSave = route.lastIndexOf("    await save(state);");
-const confirmedMarker = "// TURN STEAL confirmed event v2";
+const confirmedMarker = "// TURN STEAL confirmed event v3";
 if (!route.includes(confirmedMarker)) {
   if (finalSave < 0) throw new Error("No se encontró el guardado final de la sala.");
-  const eventBlock = `    ${confirmedMarker}\n    if (action === "play" && confirmedTurnStealVictimId && actor) {\n      const stolenFrom = state.players.find((item) => item.id === confirmedTurnStealVictimId);\n      state.lastEvent = {\n        kind: "turn-steal",\n        actorId: actor.id,\n        actorName: actor.name,\n        targets: stolenFrom ? [{ id: stolenFrom.id, name: stolenFrom.name }] : [],\n        label: confirmedTurnStealLabel ?? state.lastPlay?.label ?? "?",\n        global: true,\n        at: Date.now(),\n      };\n    }\n`;
+  const eventBlock = `    ${confirmedMarker}\n    if (action === "play" && confirmedTurnStealVictimId && actor) {\n      if (state.pendingVote?.playerId === playerId) {\n        const impartialVoters = state.players.filter(\n          (item) =>\n            item.id !== playerId &&\n            item.id !== confirmedTurnStealVictimId,\n        );\n        if (impartialVoters.length === 0) resolveVote(state, true);\n      }\n      const stolenFrom = state.players.find((item) => item.id === confirmedTurnStealVictimId);\n      state.lastEvent = {\n        kind: "turn-steal",\n        actorId: actor.id,\n        actorName: actor.name,\n        targets: stolenFrom ? [{ id: stolenFrom.id, name: stolenFrom.name }] : [],\n        label: confirmedTurnStealLabel ?? state.lastPlay?.label ?? "?",\n        global: true,\n        at: Date.now(),\n      };\n    }\n`;
   route = route.slice(0, finalSave) + eventBlock + route.slice(finalSave);
 }
 
@@ -140,6 +125,7 @@ const required = [
   [routeCheck, confirmedMarker],
   [routeCheck, "pending.turnStealVictimId === playerId"],
   [routeCheck, "turnStealVictimId: confirmedTurnStealVictimId ?? undefined"],
+  [routeCheck, "if (impartialVoters.length === 0) resolveVote(state, true);"],
   [pageCheck, "No votas en esta ronda: te robaron el turno."],
   [pageCheck, "now - room.lastEvent.at < 4200"],
 ];
