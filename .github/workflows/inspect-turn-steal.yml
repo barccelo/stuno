@@ -13,16 +13,11 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --progress=false
-      - name: Inspect generated turn flow
-        shell: bash
+      - name: Apply and verify turn steal
         run: |
           npm run prebuild
-          set +o pipefail
-          echo '--- REQUEST/ACT ---'
-          awk '/async function request\(/,/function animatePlay\(/' app/page.tsx | head -260
-          echo '--- CAN PLAY ---'
-          grep -n -C 18 'const canPlay = Boolean' app/page.tsx | head -120
-          echo '--- CARD BUTTON OPENING ---'
-          sed -n '2918,2955p' app/page.tsx
-          echo '--- CREATE FORM OPTIONS ---'
-          sed -n '3760,3845p' app/page.tsx
+          node scripts/apply-turn-steal.mjs
+          node scripts/apply-turn-steal.mjs
+          grep -q 'turn-steal-ready' app/page.tsx
+          grep -q 'applyTurnStealAtomically' app/api/rooms/route.ts
+      - run: npm run build
