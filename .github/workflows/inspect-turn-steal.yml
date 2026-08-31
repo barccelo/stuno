@@ -18,13 +18,11 @@ jobs:
         run: |
           npm run prebuild
           set +o pipefail
-          echo '--- PLAY ACTION ---'
-          awk '/else if \(action === "play"\)/,/else if \(action === "pass"\)/' app/api/rooms/route.ts | head -420
-          echo '--- CREATE SETTINGS UI ---'
-          grep -n -C 10 'startDelaySeconds\|playStyle\|turnSeconds' app/page.tsx | head -320
-          echo '--- CARD BUTTON ---'
-          grep -n -C 10 'selectCard(card' app/page.tsx | head -220
-          echo '--- PLAY SELECTED ---'
-          awk '/function playSelectedCard\(/,/function selectCard\(/' app/page.tsx | head -240
-          echo '--- GAMESTATE SETTINGS ---'
-          grep -n -C 8 'settings:' lib/game.ts | head -140
+          echo '--- REQUEST/ACT ---'
+          awk '/async function request\(/,/function animatePlay\(/' app/page.tsx | head -260
+          echo '--- CAN PLAY ---'
+          grep -n -C 18 'const canPlay = Boolean' app/page.tsx | head -120
+          echo '--- CARD BUTTON OPENING ---'
+          sed -n '2918,2955p' app/page.tsx
+          echo '--- CREATE FORM OPTIONS ---'
+          sed -n '3760,3845p' app/page.tsx
