@@ -16,8 +16,8 @@ jobs:
       - name: Apply and verify turn steal
         run: |
           npm run prebuild
-          node scripts/apply-turn-steal.mjs
-          node scripts/apply-turn-steal.mjs
+          node scripts/apply-turn-steal-v2.mjs
+          node scripts/apply-turn-steal-v2.mjs
           grep -q 'turn-steal-ready' app/page.tsx
           grep -q 'applyTurnStealAtomically' app/api/rooms/route.ts
       - run: npm run build
