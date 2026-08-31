@@ -2,14 +2,13 @@ import { readFile, writeFile } from "node:fs/promises";
 
 // Runs after apply-turn-steal-on-submit.mjs.
 // A provisional turn-steal selection must survive while the player is still
-// technically out of turn. Match the legacy cleanup effect by behavior rather
-// than by one exact source string because earlier build patches can alter its
-// dependency list or formatting.
+// technically out of turn. Earlier patches may expand the cleanup effect with
+// COMBO/ROBO state resets, so match the whole cleanup family explicitly.
 let page = await readFile("app/page.tsx", "utf8");
 
-const marker = "// TURN STEAL provisional-selection persistence v4";
+const marker = "// TURN STEAL provisional-selection persistence v5";
 if (!page.includes(marker)) {
-  const effectPattern = /  useEffect\(\(\) => \{\s*if \(!selected \|\| canPlay\) return;\s*setSelected\(null\);\s*setAnswer\(""\);\s*setSwapCard\(null\);\s*if \(document\.activeElement instanceof HTMLElement\)\s*document\.activeElement\.blur\(\);\s*\}, \[[^\]]*canPlay[^\]]*selected[^\]]*\]\);/m;
+  const effectPattern = /  useEffect\(\(\) => \{\s*if \(!selected \|\| canPlay\) return;\s*setSelected\(null\);\s*setAnswer\(""\);\s*setSwapCard\(null\);(?:\s*setComboCard\(null\);)?(?:\s*setComboLetters\(\[\]\);)?(?:\s*setComboAnswer\(""\);)?(?:\s*setStealCard\(null\);)?(?:\s*setStealTarget\(""\);)?\s*if \(document\.activeElement instanceof HTMLElement\)\s*document\.activeElement\.blur\(\);\s*\}, \[[^\]]*canPlay[^\]]*selected[^\]]*\]\);/m;
 
   const replacement = `  useEffect(() => {
     ${marker}
@@ -22,6 +21,11 @@ if (!page.includes(marker)) {
     setSelected(null);
     setAnswer("");
     setSwapCard(null);
+    setComboCard(null);
+    setComboLetters([]);
+    setComboAnswer("");
+    setStealCard(null);
+    setStealTarget("");
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
   }, [
@@ -34,10 +38,12 @@ if (!page.includes(marker)) {
   ]);`;
 
   if (!effectPattern.test(page)) {
-    const diagnostic = page.match(/useEffect\(\(\) => \{[\s\S]{0,500}?setSelected\(null\);[\s\S]{0,500}?\}\s*,\s*\[[^\]]*\]\);/m)?.[0];
+    const start = page.indexOf("  useEffect(() => {\n    if (!selected || canPlay) return;");
+    const diagnostic =
+      start >= 0 ? page.slice(start, Math.min(page.length, start + 900)) : "";
     throw new Error(
       "No se encontró el efecto de limpieza de selección para Robar turno." +
-        (diagnostic ? ` Bloque cercano: ${diagnostic.slice(0, 700)}` : ""),
+        (diagnostic ? ` Bloque cercano: ${diagnostic}` : ""),
     );
   }
 
