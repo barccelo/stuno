@@ -75,9 +75,16 @@ if (!route.includes("state.players.length - 1 - (pending.turnStealVictimId ? 1 :
 
 // With two players, actor + victim leaves no impartial voter. Approve directly.
 if (!route.includes("const impartialVoters = state.players.filter(")) {
-  const pendingVoteAssignment = /(\s+state\.pendingVote = \{ \.\.\.submission, votes: \{\} \};)(\s+state\.message = `Respuesta de \$\{actor!\.name\}: “\$\{answer\}”`;)/m;
-  if (!pendingVoteAssignment.test(route))
-    throw new Error("No se encontró la creación de pendingVote para resolver sin votantes imparciales.");
+  // Earlier patches may add expiresAt or other fields to pendingVote. Match the
+  // assignment by meaning instead of requiring one exact object literal.
+  const pendingVoteAssignment = /(\s+state\.pendingVote\s*=\s*\{[\s\S]*?\.\.\.submission[\s\S]*?votes\s*:\s*\{\}[\s\S]*?\};)(\s+state\.message\s*=\s*`Respuesta de \$\{actor!\.name\}: “\$\{answer\}”`;)/m;
+  if (!pendingVoteAssignment.test(route)) {
+    const diagnostic = route.match(/state\.pendingVote\s*=\s*\{[\s\S]{0,500}?\};/m)?.[0];
+    throw new Error(
+      "No se encontró la creación de pendingVote para resolver sin votantes imparciales." +
+        (diagnostic ? ` Bloque cercano: ${diagnostic.slice(0, 650)}` : ""),
+    );
+  }
   route = route.replace(
     pendingVoteAssignment,
     `$1\n          const impartialVoters = state.players.filter(\n            (item) =>\n              item.id !== playerId &&\n              item.id !== submission.turnStealVictimId,\n          );\n          if (submission.turnStealVictimId && impartialVoters.length === 0)\n            resolveVote(state, true);\n          else$2`,
