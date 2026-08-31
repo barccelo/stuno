@@ -18,7 +18,7 @@ if (!page.includes(marker)) {
 const cssPath = "app/ui-fixes.css";
 let css = await readFile(cssPath, "utf8");
 const cssMarker = "/* Turn steal priority notice. */";
-const cssBlock = `${cssMarker}\n/* The table event can be hidden by vote/turn-attention layers. Keep only the\n   dedicated fixed copy visible so the room always sees the steal. The popup\n   keeps the exact base dimensions of .game-event-popup. */\n.event-slot .game-event-popup.turn-steal {\n  visibility: hidden !important;\n}\n.turn-steal-priority-notice {\n  position: fixed !important;\n  left: 50% !important;\n  top: 47% !important;\n  transform: translate(-50%, -50%) !important;\n  z-index: 1250 !important;\n  pointer-events: none !important;\n  visibility: visible !important;\n}\n.turn-steal-priority-notice .game-event-symbol {\n  display: grid !important;\n  place-items: center !important;\n}\n.turn-steal-priority-notice .turn-steal-event-card {\n  margin: 0 !important;\n  justify-self: center !important;\n  align-self: center !important;\n}\n@media (max-width: 520px) {\n  .turn-steal-priority-notice {\n    top: 46% !important;\n  }\n}\n`;
+const cssBlock = `${cssMarker}\n/* The table event can be hidden by vote/turn-attention layers. Keep only the\n   dedicated fixed copy visible so the room always sees the steal. The popup\n   keeps the exact base dimensions of .game-event-popup. */\n.event-slot .game-event-popup.turn-steal {\n  visibility: hidden !important;\n}\n.turn-steal-priority-notice {\n  position: fixed !important;\n  left: 50% !important;\n  top: 47% !important;\n  transform: translate(-50%, -50%) !important;\n  z-index: 1250 !important;\n  pointer-events: none !important;\n  visibility: visible !important;\n}\n.turn-steal-priority-notice .game-event-symbol {\n  display: grid !important;\n  place-items: center !important;\n  align-self: center !important;\n  overflow: visible !important;\n}\n.turn-steal-priority-notice .turn-steal-event-card {\n  width: 40px !important;\n  min-width: 40px !important;\n  height: 48px !important;\n  max-height: 48px !important;\n  margin: 0 !important;\n  padding: 3px !important;\n  box-sizing: border-box !important;\n  justify-self: center !important;\n  align-self: center !important;\n  transform: none !important;\n}\n@media (max-width: 520px) {\n  .turn-steal-priority-notice {\n    top: 46% !important;\n  }\n  .turn-steal-priority-notice .turn-steal-event-card {\n    width: 38px !important;\n    min-width: 38px !important;\n    height: 46px !important;\n    max-height: 46px !important;\n  }\n}\n`;
 
 if (css.includes(cssMarker)) {
   const start = css.indexOf(cssMarker);
@@ -35,9 +35,10 @@ const check = await readFile(cssPath, "utf8");
 if (
   !check.includes(cssMarker) ||
   check.includes(".turn-steal-priority-notice {\n  position: fixed !important;\n  left: 50% !important;\n  top: 47% !important;\n  transform: translate(-50%, -50%) !important;\n  z-index: 1250 !important;\n  width:") ||
-  !check.includes("place-items: center !important;")
+  !check.includes("place-items: center !important;") ||
+  !check.includes("height: 48px !important;")
 ) {
-  throw new Error("El aviso prioritario de Robar turno no heredó correctamente las medidas estándar.");
+  throw new Error("El aviso prioritario de Robar turno no ajustó correctamente la mini carta.");
 }
 
-console.log("Turn steal priority notice now matches the standard event popup size and centers its mini card.");
+console.log("Turn steal priority notice now keeps its mini card fully inside the standard event popup.");
