@@ -102,7 +102,12 @@ function finalizeExpiredGameTurns(state: GameState, now = Date.now()) {
     // During catch-up use the actual expired deadline so elapsed unattended turns
     // are not artificially restarted from the moment somebody returns.
     state.turnStartedAt = deadline + TURN_NOTICE_GRACE_MS;
-    state.message = `Se acabó el tiempo. ${expiredName} roba una carta. Turno de ${state.players[state.turnIndex]?.name}.`;
+    state.message =
+      "Se acabó el tiempo. " +
+      expiredName +
+      " roba una carta. Turno de " +
+      (state.players[state.turnIndex]?.name ?? "otro jugador") +
+      ".";
     changed = true;
   }
   return changed;
