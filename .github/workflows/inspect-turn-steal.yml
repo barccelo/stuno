@@ -20,4 +20,4 @@ jobs:
           node scripts/apply-turn-steal-v2.mjs
           grep -q 'turn-steal-ready' app/page.tsx
           grep -q 'applyTurnStealAtomically' app/api/rooms/route.ts
-      - run: npm run build
+      - run: npx vinext build
