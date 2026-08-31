@@ -189,6 +189,24 @@ if (!route.includes("// SERVER TIMEOUT POST FAST PATH v1")) {
   route = route.slice(0, insertionPoint) + fastPath + route.slice(insertionPoint);
 }
 
+// Every ordinary POST action also starts from the server-timer-resolved snapshot.
+// This prevents a late play/save from restoring a turn that expired concurrently.
+{
+  const postStart = route.indexOf("export async function POST(request: Request) {");
+  if (postStart < 0) throw new Error("No se encontró POST para proteger acciones tardías.");
+  const postSection = route.slice(postStart);
+  if (!postSection.includes("const state = await loadRoomWithServerTimers(roomCode);")) {
+    const loadPattern = /const state = await load\(roomCode\);/;
+    if (!loadPattern.test(postSection))
+      throw new Error("No se encontró la carga principal de sala dentro de POST.");
+    const changed = postSection.replace(
+      loadPattern,
+      "const state = await loadRoomWithServerTimers(roomCode);",
+    );
+    route = route.slice(0, postStart) + changed;
+  }
+}
+
 await writeFile(routePath, route, "utf8");
 
 // Any visible player may provide the immediate timeout request. The server-side
@@ -213,18 +231,20 @@ const checkCall = pageCheck.indexOf(timeoutCall);
 const checkStart = pageCheck.lastIndexOf("  useEffect(() => {", checkCall);
 const checkEnd = pageCheck.indexOf("  ]);", checkCall);
 const checkEffect = pageCheck.slice(checkStart, checkEnd + 5);
+const timerLoads = routeCheck.match(/const state = await loadRoomWithServerTimers\(roomCode\);/g) ?? [];
 const required = [
   helperMarker,
   "async function loadRoomWithServerTimers(roomCode: string)",
   "finalizeExpiredGameTurns(state, Date.now())",
   "eq(rooms.state, row.state)",
-  "const state = await loadRoomWithServerTimers(roomCode);",
   "// SERVER TIMEOUT POST FAST PATH v1",
 ];
 const missing = required.filter((token) => !routeCheck.includes(token));
 if (missing.length)
   throw new Error(`Timeout autoritativo incompleto: ${missing.join(", ")}`);
+if (timerLoads.length < 2)
+  throw new Error("GET y POST no están cargando la sala mediante el reloj del servidor.");
 if (checkEffect.includes("playerId !== room.hostId"))
   throw new Error("El timeout cliente todavía depende exclusivamente del host.");
 
-console.log("Server-authoritative turn timeout applied: any room sync advances expired turns and catches up unattended games.");
+console.log("Server-authoritative turn timeout applied: any room sync advances expired turns, POST actions see resolved timers, and unattended games catch up safely.");
