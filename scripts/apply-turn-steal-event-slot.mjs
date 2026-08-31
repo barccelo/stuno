@@ -34,12 +34,9 @@ if (!page.includes(marker)) {
 
   const turnStealBlock = `                {/* ${marker} */}\n                {room.lastTurnStealNotice &&\n                  now - room.lastTurnStealNotice.at >= 1300 &&\n                  now - room.lastTurnStealNotice.at < 3700 &&\n                  (() => {\n                    const notice = room.lastTurnStealNotice!;\n                    const title = notice.actorId === playerId\n                      ? "Robaste el turno"\n                      : notice.victimId === playerId\n                        ? "Te robaron el turno"\n                        : \`${"${notice.actorName}"} robó el turno\`;\n                    const detail = notice.actorId === playerId\n                      ? \`Te adelantaste con otra ${"${notice.label}"}.\`\n                      : notice.victimId === playerId\n                        ? \`${"${notice.actorName}"} se adelantó con otra ${"${notice.label}"}.\`\n                        : \`Se adelantó con otra ${"${notice.label}"} antes que ${"${notice.victimName}"}.\`;\n                    const symbol = notice.label.length <= 2\n                      ? notice.label\n                      : notice.label === "SWITCH"\n                        ? "↔"\n                        : notice.label === "NUEVA CATEGORÍA"\n                          ? "C"\n                          : notice.label === "BLOQUEAR TURNO"\n                            ? "⊘"\n                            : notice.label.slice(0, 2);\n                    return (\n                      <div className="game-event-popup turn-steal">\n                        <span className="game-event-symbol">\n                          <span className="turn-steal-slot-card">{symbol}</span>\n                        </span>\n                        <strong>{title}</strong>\n                        <small>{detail}</small>\n                      </div>\n                    );\n                  })()}\n`;
 
-  page = page.replace(
-    lastEventAnchor,
-    turnStealBlock +
-      `                {room.lastEvent && room.lastEvent.kind !== "turn-steal" && now - room.lastEvent.at < 2400 && (() => {`,
-  );
+  const normalEventGuard = `                {(!room.lastTurnStealNotice ||\n                  now - room.lastTurnStealNotice.at < 1300 ||\n                  now - room.lastTurnStealNotice.at >= 3700) &&\n                  room.lastEvent &&\n                  room.lastEvent.kind !== "turn-steal" &&\n                  now - room.lastEvent.at < 2400 &&\n                  (() => {`;
 
+  page = page.replace(lastEventAnchor, turnStealBlock + normalEventGuard);
   await writeFile(pagePath, page, "utf8");
 }
 
@@ -60,6 +57,7 @@ if (
   !pageCheck.includes(marker) ||
   pageCheck.includes("turn-steal-priority-notice") ||
   !pageCheck.includes('room.lastEvent.kind !== "turn-steal"') ||
+  !pageCheck.includes("now - room.lastTurnStealNotice.at >= 3700") ||
   !cssCheck.includes(cssMarker) ||
   cssCheck.includes("/* Turn steal priority notice. */") ||
   cssCheck.includes("/* Turn steal popup parity v1. */")
