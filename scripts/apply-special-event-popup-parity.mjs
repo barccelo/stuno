@@ -173,3 +173,4 @@ if (!css.includes("/* Special-card event popup parity v1. */")) {
 }
 
 console.log("Special-card popup parity applied: COMBO standardized and joker event enabled.");
+await import("./apply-combo-tablet-fit.mjs");
