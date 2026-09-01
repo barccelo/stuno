@@ -21,107 +21,6 @@ function patchNoticeType(source, kindType, label) {
   return source.slice(0, start) + changed + source.slice(end);
 }
 
-function patchEventSlotNotice(source) {
-  const marker = "TURN STEAL event-slot v2";
-  const markerIndex = source.indexOf(marker);
-  if (markerIndex < 0)
-    throw new Error("No se encontró el aviso de Robar turno dentro del event-slot estándar.");
-
-  const blockStart = source.lastIndexOf("                {/*", markerIndex);
-  const endAnchor = "                {room.lastEvent &&";
-  const blockEnd = source.indexOf(endAnchor, markerIndex);
-  if (blockStart < 0 || blockEnd < 0)
-    throw new Error("No se pudo aislar el aviso final de Robar turno en event-slot.");
-
-  let block = source.slice(blockStart, blockEnd);
-
-  if (!block.includes("const turnStealCardDescription =")) {
-    const noticeLine = "                    const notice = room.lastTurnStealNotice!;";
-    if (!block.includes(noticeLine))
-      throw new Error("No se encontró la variable notice del event-slot de Robar turno.");
-    const description = [
-      noticeLine,
-      "                    const turnStealCardDescription =",
-      '                      notice.kind === "joker"',
-      '                        ? "un comodín"',
-      '                        : notice.kind === "stop"',
-      '                          ? "una carta Bloquear turno"',
-      '                          : notice.kind === "reverse"',
-      '                            ? "una Inversa"',
-      '                            : notice.kind === "swap"',
-      '                              ? "un SWAP"',
-      '                              : notice.kind === "category"',
-      '                                ? "una Nueva categoría"',
-      '                                : notice.kind === "combo"',
-      '                                  ? "un COMBO"',
-      '                                  : notice.kind === "steal"',
-      '                                    ? "una carta ROBO"',
-      '                                    : `otra ${notice.label}`;',
-    ].join("\n");
-    block = block.replace(noticeLine, description);
-  }
-
-  const oldDetail = [
-    "                    const detail = notice.actorId === playerId",
-    '                      ? `Te adelantaste con otra ${notice.label}.`',
-    "                      : notice.victimId === playerId",
-    '                        ? `${notice.actorName} se adelantó con otra ${notice.label}.`',
-    '                        : `Se adelantó con otra ${notice.label} antes que ${notice.victimName}.`;',
-  ].join("\n");
-  const newDetail = [
-    "                    const detail = notice.actorId === playerId",
-    '                      ? `Te adelantaste con ${turnStealCardDescription}.`',
-    "                      : notice.victimId === playerId",
-    '                        ? `${notice.actorName} se adelantó con ${turnStealCardDescription}.`',
-    '                        : `Se adelantó con ${turnStealCardDescription} antes que ${notice.victimName}.`;',
-  ].join("\n");
-  if (!block.includes(newDetail)) {
-    if (!block.includes(oldDetail))
-      throw new Error("No se encontró el texto actual del aviso de Robar turno en event-slot.");
-    block = block.replace(oldDetail, newDetail);
-  }
-
-  const oldSymbolStart = "                    const symbol = notice.label.length <= 2";
-  const symbolEnd = "                            : notice.label.slice(0, 2);";
-  const oldSymbolIndex = block.indexOf(oldSymbolStart);
-  const oldSymbolEnd = oldSymbolIndex >= 0 ? block.indexOf(symbolEnd, oldSymbolIndex) : -1;
-  if (!block.includes("const symbol = notice.kind === \"joker\"")) {
-    if (oldSymbolIndex < 0 || oldSymbolEnd < 0)
-      throw new Error("No se encontró el cálculo del símbolo de Robar turno.");
-    const replacement = [
-      '                    const symbol = notice.kind === "joker"',
-      '                      ? "★"',
-      '                      : notice.kind === "stop"',
-      '                        ? "⊘"',
-      '                        : notice.kind === "reverse"',
-      '                          ? "↔"',
-      '                          : notice.kind === "swap"',
-      '                            ? "⇄"',
-      '                            : notice.kind === "category"',
-      '                              ? "C"',
-      '                              : notice.kind === "combo"',
-      '                                ? "COMBO"',
-      '                                : notice.kind === "steal"',
-      '                                  ? "☠"',
-      '                                  : notice.label;',
-    ].join("\n");
-    block =
-      block.slice(0, oldSymbolIndex) +
-      replacement +
-      block.slice(oldSymbolEnd + symbolEnd.length);
-  }
-
-  const oldCard = '<span className="turn-steal-slot-card">{symbol}</span>';
-  const newCard = '<span className={`turn-steal-slot-card ${notice.kind ?? "letter"}`}>{symbol}</span>';
-  if (!block.includes(newCard)) {
-    if (!block.includes(oldCard))
-      throw new Error("No se encontró la mini carta del event-slot de Robar turno.");
-    block = block.replace(oldCard, newCard);
-  }
-
-  return source.slice(0, blockStart) + block + source.slice(blockEnd);
-}
-
 // ---------- Shared state: remember the exact card used to steal the turn ----------
 let game = await readFile("lib/game.ts", "utf8");
 if (!game.includes("turnStealCardKind?: CardKind;")) {
@@ -186,17 +85,19 @@ route = replaceRequired(
 );
 await writeFile("app/api/rooms/route.ts", route, "utf8");
 
-// ---------- Client: render the exact card in the final standard event slot ----------
+// ---------- Client type ----------
+// The final event-slot JSX is generated by apply-turn-steal-event-slot.mjs.
+// Do not parse/rewrite that generated block again here: this patch only supplies
+// the card kind that the already-generated renderer consumes.
 const pagePath = "app/page.tsx";
 let page = await readFile(pagePath, "utf8");
 page = patchNoticeType(page, 'GameCard["kind"]', "Room UI");
-page = patchEventSlotNotice(page);
 await writeFile(pagePath, page, "utf8");
 
 // ---------- Visual parity ----------
 const cssPath = "app/ui-fixes.css";
 let css = await readFile(cssPath, "utf8");
-const cssMarker = "/* TURN STEAL real card identity v2 */";
+const cssMarker = "/* TURN STEAL real card identity v3 */";
 if (!css.includes(cssMarker)) {
   css += `\n\n${cssMarker}
 /* Center the joker popup star by geometry instead of the glyph baseline. */
@@ -221,8 +122,8 @@ if (!css.includes(cssMarker)) {
   transform: none !important;
 }
 
-/* Robar turno keeps the standard popup geometry, but its miniature now mirrors
-   the real card type used to take the turn. */
+/* Robar turno keeps the standard popup geometry, but its miniature mirrors the
+   exact card type used to take the turn. */
 .event-slot .game-event-popup.turn-steal .turn-steal-slot-card.joker {
   background: var(--gold, #f4bd3b) !important;
   color: var(--ink, #14213d) !important;
@@ -267,14 +168,20 @@ if (!css.includes(cssMarker)) {
 }
 
 // ---------- Build-time verification ----------
+const gameCheck = await readFile("lib/game.ts", "utf8");
+const routeCheck = await readFile("app/api/rooms/route.ts", "utf8");
+const pageCheck = await readFile(pagePath, "utf8");
+const cssCheck = await readFile(cssPath, "utf8");
 const checks = [
-  [await readFile("lib/game.ts", "utf8"), "turnStealCardKind?: CardKind;"],
-  [await readFile("app/api/rooms/route.ts", "utf8"), "confirmedTurnStealKind = armed.kind;"],
-  [await readFile("app/api/rooms/route.ts", "utf8"), 'kind: submission.turnStealCardKind ?? "letter"'],
-  [await readFile(pagePath, "utf8"), "TURN STEAL event-slot v2"],
-  [await readFile(pagePath, "utf8"), "const turnStealCardDescription ="],
-  [await readFile(pagePath, "utf8"), 'turn-steal-slot-card ${notice.kind ?? "letter"}'],
-  [await readFile(cssPath, "utf8"), cssMarker],
+  [gameCheck, "turnStealCardKind?: CardKind;"],
+  [gameCheck, "kind: CardKind;"],
+  [routeCheck, "confirmedTurnStealKind = armed.kind;"],
+  [routeCheck, 'kind: submission.turnStealCardKind ?? "letter"'],
+  [pageCheck, "TURN STEAL event-slot v2"],
+  [pageCheck, "const turnStealCardDescription ="],
+  [pageCheck, 'turn-steal-slot-card ${notice.kind ?? "letter"}'],
+  [pageCheck, 'kind: GameCard["kind"];'],
+  [cssCheck, cssMarker],
 ];
 const missing = checks
   .filter(([source, token]) => !source.includes(token))
@@ -282,4 +189,4 @@ const missing = checks
 if (missing.length)
   throw new Error(`Turn-steal card popup parity incompleto: ${missing.join(", ")}`);
 
-console.log("Turn steal popup now keeps the exact card identity in the standard event slot; joker star is geometrically centered.");
+console.log("Turn steal popup uses the exact played-card identity; joker star is geometrically centered.");
