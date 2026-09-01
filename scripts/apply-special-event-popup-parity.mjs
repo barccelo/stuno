@@ -26,19 +26,27 @@ function ensureLastEventKind(source, kind, label) {
   );
 }
 
-let game = await readFile("lib/game.ts", "utf8");
-game = ensureLastEventKind(game, "joker", "tipo de evento de comodín en GameState");
-await writeFile("lib/game.ts", game, "utf8");
+function insertJokerAcceptedEvent(source) {
+  const marker = "// Joker accepted: publish the same event popup as the other special cards.";
+  if (source.includes(marker)) return source;
 
-let route = await readFile("app/api/rooms/route.ts", "utf8");
-if (!route.includes("// Joker accepted: publish the same event popup as the other special cards.")) {
-  const anchor = [
-    '  state.acceptedWords.push(normalized(submission.answer));',
-    '  const finishAfter = owner.hand.length === 0 && card.kind !== "category";',
-  ].join("\n");
-  const replacement = [
-    '  state.acceptedWords.push(normalized(submission.answer));',
-    '  // Joker accepted: publish the same event popup as the other special cards.',
+  const start = source.indexOf("function applyAccepted(state: GameState, submission: Submission) {");
+  const end = source.indexOf("function beginSimultaneousReview", start);
+  if (start < 0 || end < 0)
+    throw new Error("No se pudo aislar applyAccepted para instalar el evento de comodín.");
+
+  let block = source.slice(start, end);
+  const anchor = "  state.acceptedWords.push(normalized(submission.answer));";
+  // COMBO también registra acceptedWords dentro de su rama especial. Usamos la
+  // última aparición dentro de applyAccepted, que corresponde al flujo normal
+  // de letras/comodín y no depende de lo que hayan insertado parches anteriores.
+  const anchorIndex = block.lastIndexOf(anchor);
+  if (anchorIndex < 0)
+    throw new Error("No se encontró el registro de palabra aceptada del flujo normal.");
+
+  const addition = [
+    anchor,
+    `  ${marker}`,
     '  if (card.kind === "joker") {',
     '    state.lastEvent = {',
     '      kind: "joker",',
@@ -50,10 +58,21 @@ if (!route.includes("// Joker accepted: publish the same event popup as the othe
     '      at: Date.now(),',
     '    };',
     '  }',
-    '  const finishAfter = owner.hand.length === 0 && card.kind !== "category";',
   ].join("\n");
-  route = replaceRequired(route, anchor, replacement, "evento de comodín aprobado");
+
+  block =
+    block.slice(0, anchorIndex) +
+    addition +
+    block.slice(anchorIndex + anchor.length);
+  return source.slice(0, start) + block + source.slice(end);
 }
+
+let game = await readFile("lib/game.ts", "utf8");
+game = ensureLastEventKind(game, "joker", "tipo de evento de comodín en GameState");
+await writeFile("lib/game.ts", game, "utf8");
+
+let route = await readFile("app/api/rooms/route.ts", "utf8");
+route = insertJokerAcceptedEvent(route);
 await writeFile("app/api/rooms/route.ts", route, "utf8");
 
 let page = await readFile("app/page.tsx", "utf8");
