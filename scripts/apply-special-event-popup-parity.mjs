@@ -14,13 +14,20 @@ function insertBeforeRequired(source, anchor, addition, marker, label) {
   return source.replace(anchor, addition + anchor);
 }
 
+function ensureLastEventKind(source, kind, label) {
+  const pattern = /(lastEvent\?:\s*\{[\s\S]*?kind:\s*)([^;]+)(;)/m;
+  const match = source.match(pattern);
+  if (!match)
+    throw new Error(`No se encontró el tipo lastEvent para: ${label}`);
+  if (match[2].includes(`"${kind}"`)) return source;
+  return source.replace(
+    pattern,
+    match[1] + match[2].trim() + ` | "${kind}"` + match[3],
+  );
+}
+
 let game = await readFile("lib/game.ts", "utf8");
-game = replaceRequired(
-  game,
-  '    kind: "block" | "penalty" | "reverse" | "category" | "swap" | "steal" | "combo" | "draw";',
-  '    kind: "block" | "penalty" | "reverse" | "category" | "swap" | "steal" | "combo" | "joker" | "draw";',
-  "tipo de evento de comodín en GameState",
-);
+game = ensureLastEventKind(game, "joker", "tipo de evento de comodín en GameState");
 await writeFile("lib/game.ts", game, "utf8");
 
 let route = await readFile("app/api/rooms/route.ts", "utf8");
@@ -39,6 +46,7 @@ if (!route.includes("// Joker accepted: publish the same event popup as the othe
     '      actorName: owner.name,',
     '      targets: [],',
     '      label: submission.answer,',
+    '      global: true,',
     '      at: Date.now(),',
     '    };',
     '  }',
@@ -49,12 +57,7 @@ if (!route.includes("// Joker accepted: publish the same event popup as the othe
 await writeFile("app/api/rooms/route.ts", route, "utf8");
 
 let page = await readFile("app/page.tsx", "utf8");
-page = replaceRequired(
-  page,
-  '    kind: "block" | "penalty" | "reverse" | "category" | "swap" | "steal" | "combo" | "draw";',
-  '    kind: "block" | "penalty" | "reverse" | "category" | "swap" | "steal" | "combo" | "joker" | "draw";',
-  "tipo de evento de comodín en la UI",
-);
+page = ensureLastEventKind(page, "joker", "tipo de evento de comodín en la UI");
 
 page = insertBeforeRequired(
   page,
@@ -151,3 +154,5 @@ if (!css.includes("/* Special-card event popup parity v1. */")) {
 `;
   await writeFile("app/ui-fixes.css", css, "utf8");
 }
+
+console.log("Special-card popup parity applied: COMBO standardized and joker event enabled.");
