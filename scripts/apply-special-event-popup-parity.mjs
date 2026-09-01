@@ -1,12 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-function replaceRequired(source, from, to, label) {
-  if (source.includes(to)) return source;
-  if (!source.includes(from))
-    throw new Error(`No se encontró el bloque esperado para: ${label}`);
-  return source.replace(from, to);
-}
-
 function insertBeforeRequired(source, anchor, addition, marker, label) {
   if (source.includes(marker)) return source;
   if (!source.includes(anchor))
@@ -67,6 +60,40 @@ function insertJokerAcceptedEvent(source) {
   return source.slice(0, start) + block + source.slice(end);
 }
 
+function insertJokerSymbol(source) {
+  if (source.includes('room.lastEvent!.kind === "joker"')) return source;
+
+  const popupStart = source.indexOf('<div className={`game-event-popup ${room.lastEvent!.kind}`}>');
+  if (popupStart < 0)
+    throw new Error("No se encontró el popup estándar de eventos para el símbolo del comodín.");
+  const symbolEnd = source.indexOf("                      </span>", popupStart);
+  if (symbolEnd < 0)
+    throw new Error("No se pudo aislar el símbolo del popup estándar.");
+
+  let block = source.slice(popupStart, symbolEnd);
+  const defaultAnchor = [
+    '                        ) : (',
+    '                          "C"',
+    '                        )}',
+  ].join("\n");
+  const anchorIndex = block.lastIndexOf(defaultAnchor);
+  if (anchorIndex < 0)
+    throw new Error("No se encontró el símbolo por defecto del popup estándar.");
+
+  const replacement = [
+    '                        ) : room.lastEvent!.kind === "joker" ? (',
+    '                          "★"',
+    '                        ) : (',
+    '                          "C"',
+    '                        )}',
+  ].join("\n");
+  block =
+    block.slice(0, anchorIndex) +
+    replacement +
+    block.slice(anchorIndex + defaultAnchor.length);
+  return source.slice(0, popupStart) + block + source.slice(symbolEnd);
+}
+
 let game = await readFile("lib/game.ts", "utf8");
 game = ensureLastEventKind(game, "joker", "tipo de evento de comodín en GameState");
 await writeFile("lib/game.ts", game, "utf8");
@@ -93,25 +120,7 @@ page = insertBeforeRequired(
   "texto del popup de comodín",
 );
 
-if (!page.includes('room.lastEvent!.kind === "joker"')) {
-  const oldSymbol = [
-    '                        ) : room.lastEvent!.kind === "combo" ? (',
-    '                          "COMBO"',
-    '                        ) : (',
-    '                          "C"',
-    '                        )}',
-  ].join("\n");
-  const newSymbol = [
-    '                        ) : room.lastEvent!.kind === "combo" ? (',
-    '                          "COMBO"',
-    '                        ) : room.lastEvent!.kind === "joker" ? (',
-    '                          "★"',
-    '                        ) : (',
-    '                          "C"',
-    '                        )}',
-  ].join("\n");
-  page = replaceRequired(page, oldSymbol, newSymbol, "símbolo del popup de comodín");
-}
+page = insertJokerSymbol(page);
 await writeFile("app/page.tsx", page, "utf8");
 
 let css = await readFile("app/ui-fixes.css", "utf8");
