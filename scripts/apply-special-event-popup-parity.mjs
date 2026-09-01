@@ -60,40 +60,6 @@ function insertJokerAcceptedEvent(source) {
   return source.slice(0, start) + block + source.slice(end);
 }
 
-function insertJokerSymbol(source) {
-  if (source.includes('room.lastEvent!.kind === "joker"')) return source;
-
-  const popupStart = source.indexOf('<div className={`game-event-popup ${room.lastEvent!.kind}`}>');
-  if (popupStart < 0)
-    throw new Error("No se encontró el popup estándar de eventos para el símbolo del comodín.");
-  const symbolEnd = source.indexOf("                      </span>", popupStart);
-  if (symbolEnd < 0)
-    throw new Error("No se pudo aislar el símbolo del popup estándar.");
-
-  let block = source.slice(popupStart, symbolEnd);
-  const defaultAnchor = [
-    '                        ) : (',
-    '                          "C"',
-    '                        )}',
-  ].join("\n");
-  const anchorIndex = block.lastIndexOf(defaultAnchor);
-  if (anchorIndex < 0)
-    throw new Error("No se encontró el símbolo por defecto del popup estándar.");
-
-  const replacement = [
-    '                        ) : room.lastEvent!.kind === "joker" ? (',
-    '                          "★"',
-    '                        ) : (',
-    '                          "C"',
-    '                        )}',
-  ].join("\n");
-  block =
-    block.slice(0, anchorIndex) +
-    replacement +
-    block.slice(anchorIndex + defaultAnchor.length);
-  return source.slice(0, popupStart) + block + source.slice(symbolEnd);
-}
-
 let game = await readFile("lib/game.ts", "utf8");
 game = ensureLastEventKind(game, "joker", "tipo de evento de comodín en GameState");
 await writeFile("lib/game.ts", game, "utf8");
@@ -120,7 +86,9 @@ page = insertBeforeRequired(
   "texto del popup de comodín",
 );
 
-page = insertJokerSymbol(page);
+// No tocamos la cadena JSX de símbolos del popup. Otros parches añaden ramas
+// (COMBO, ROBO, Robar turno) y cambiaban su forma. El comodín conserva el símbolo
+// de fallback en el markup y CSS lo sustituye visualmente por una estrella.
 await writeFile("app/page.tsx", page, "utf8");
 
 let css = await readFile("app/ui-fixes.css", "utf8");
@@ -144,12 +112,25 @@ if (!css.includes("/* Special-card event popup parity v1. */")) {
   letter-spacing: 0 !important;
 }
 
-/* The joker now uses the standard event card as well. */
+/* The joker now uses the standard event card as well. The existing fallback
+   glyph in the JSX is hidden so this rule is independent of the branch order
+   used by COMBO, ROBO or Robar turno. */
 .game-event-popup.joker .game-event-symbol,
 .game-event-symbol.joker {
   background: var(--gold, #f4bd3b) !important;
   color: var(--ink, #14213d) !important;
   -webkit-text-fill-color: var(--ink, #14213d) !important;
+  font-size: 0 !important;
+}
+.game-event-popup.joker .game-event-symbol::before,
+.game-event-symbol.joker::before {
+  content: "★";
+  display: block;
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 950;
+  color: var(--ink, #14213d);
+  -webkit-text-fill-color: var(--ink, #14213d);
 }
 
 @media (orientation: portrait) {
@@ -164,6 +145,10 @@ if (!css.includes("/* Special-card event popup parity v1. */")) {
     border-radius: 9px !important;
     font-size: 7px !important;
   }
+  .event-slot .game-event-popup.joker .game-event-symbol::before,
+  .event-slot .game-event-symbol.joker::before {
+    font-size: 18px;
+  }
 }
 
 @media (orientation: landscape) and (max-height: 650px) {
@@ -177,6 +162,10 @@ if (!css.includes("/* Special-card event popup parity v1. */")) {
     height: 38px !important;
     border-radius: 10px !important;
     font-size: 8px !important;
+  }
+  .event-slot .game-event-popup.joker .game-event-symbol::before,
+  .event-slot .game-event-symbol.joker::before {
+    font-size: 20px;
   }
 }
 `;
