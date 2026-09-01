@@ -21,89 +21,102 @@ function patchNoticeType(source, kindType, label) {
   return source.slice(0, start) + changed + source.slice(end);
 }
 
-function patchPriorityNotice(source) {
-  const marker = "TURN STEAL priority notice v2";
+function patchEventSlotNotice(source) {
+  const marker = "TURN STEAL event-slot v2";
   const markerIndex = source.indexOf(marker);
   if (markerIndex < 0)
-    throw new Error("No se encontró el bloque prioritario de Robar turno.");
+    throw new Error("No se encontró el aviso de Robar turno dentro del event-slot estándar.");
 
-  const blockStart = source.lastIndexOf("              {/*", markerIndex);
-  const endAnchor = "              <div\n                ref={dropRef}";
+  const blockStart = source.lastIndexOf("                {/*", markerIndex);
+  const endAnchor = "                {room.lastEvent &&";
   const blockEnd = source.indexOf(endAnchor, markerIndex);
   if (blockStart < 0 || blockEnd < 0)
-    throw new Error("No se pudo aislar el aviso prioritario de Robar turno.");
+    throw new Error("No se pudo aislar el aviso final de Robar turno en event-slot.");
 
   let block = source.slice(blockStart, blockEnd);
 
   if (!block.includes("const turnStealCardDescription =")) {
-    const noticeLine = "                  const notice = room.lastTurnStealNotice!;";
+    const noticeLine = "                    const notice = room.lastTurnStealNotice!;";
     if (!block.includes(noticeLine))
-      throw new Error("No se encontró la variable notice dentro de Robar turno.");
-
+      throw new Error("No se encontró la variable notice del event-slot de Robar turno.");
     const description = [
       noticeLine,
-      "                  const turnStealCardDescription =",
-      '                    notice.kind === "joker"',
-      '                      ? "un comodín"',
-      '                      : notice.kind === "stop"',
-      '                        ? "una carta Bloquear turno"',
-      '                        : notice.kind === "reverse"',
-      '                          ? "una Inversa"',
-      '                          : notice.kind === "swap"',
-      '                            ? "un SWAP"',
-      '                            : notice.kind === "category"',
-      '                              ? "una Nueva categoría"',
-      '                              : notice.kind === "combo"',
-      '                                ? "un COMBO"',
-      '                                : notice.kind === "steal"',
-      '                                  ? "una carta ROBO"',
-      '                                  : `otra ${notice.label}`;',
+      "                    const turnStealCardDescription =",
+      '                      notice.kind === "joker"',
+      '                        ? "un comodín"',
+      '                        : notice.kind === "stop"',
+      '                          ? "una carta Bloquear turno"',
+      '                          : notice.kind === "reverse"',
+      '                            ? "una Inversa"',
+      '                            : notice.kind === "swap"',
+      '                              ? "un SWAP"',
+      '                              : notice.kind === "category"',
+      '                                ? "una Nueva categoría"',
+      '                                : notice.kind === "combo"',
+      '                                  ? "un COMBO"',
+      '                                  : notice.kind === "steal"',
+      '                                    ? "una carta ROBO"',
+      '                                    : `otra ${notice.label}`;',
     ].join("\n");
     block = block.replace(noticeLine, description);
   }
 
   const oldDetail = [
-    "                  const detail = notice.actorId === playerId",
-    '                    ? `Te adelantaste con otra ${notice.label}.`',
-    "                    : notice.victimId === playerId",
-    '                      ? `${notice.actorName} se adelantó con otra ${notice.label}.`',
-    '                      : `Se adelantó con otra ${notice.label} antes que ${notice.victimName}.`;',
+    "                    const detail = notice.actorId === playerId",
+    '                      ? `Te adelantaste con otra ${notice.label}.`',
+    "                      : notice.victimId === playerId",
+    '                        ? `${notice.actorName} se adelantó con otra ${notice.label}.`',
+    '                        : `Se adelantó con otra ${notice.label} antes que ${notice.victimName}.`;',
   ].join("\n");
   const newDetail = [
-    "                  const detail = notice.actorId === playerId",
-    '                    ? `Te adelantaste con ${turnStealCardDescription}.`',
-    "                    : notice.victimId === playerId",
-    '                      ? `${notice.actorName} se adelantó con ${turnStealCardDescription}.`',
-    '                      : `Se adelantó con ${turnStealCardDescription} antes que ${notice.victimName}.`;',
+    "                    const detail = notice.actorId === playerId",
+    '                      ? `Te adelantaste con ${turnStealCardDescription}.`',
+    "                      : notice.victimId === playerId",
+    '                        ? `${notice.actorName} se adelantó con ${turnStealCardDescription}.`',
+    '                        : `Se adelantó con ${turnStealCardDescription} antes que ${notice.victimName}.`;',
   ].join("\n");
   if (!block.includes(newDetail)) {
     if (!block.includes(oldDetail))
-      throw new Error("No se encontró el texto actual del aviso de Robar turno.");
+      throw new Error("No se encontró el texto actual del aviso de Robar turno en event-slot.");
     block = block.replace(oldDetail, newDetail);
   }
 
-  const oldClass = 'className={`turn-steal-event-card mini-play-card ${room.centerPile?.[room.centerPile.length - 1]?.kind ?? "letter"}`}';
-  const newClass = 'className={`turn-steal-event-card mini-play-card ${notice.kind ?? "letter"}`}';
-  if (!block.includes(newClass)) {
-    if (!block.includes(oldClass))
-      throw new Error("No se encontró la clase de mini carta de Robar turno.");
-    block = block.replace(oldClass, newClass);
+  const oldSymbolStart = "                    const symbol = notice.label.length <= 2";
+  const symbolEnd = "                            : notice.label.slice(0, 2);";
+  const oldSymbolIndex = block.indexOf(oldSymbolStart);
+  const oldSymbolEnd = oldSymbolIndex >= 0 ? block.indexOf(symbolEnd, oldSymbolIndex) : -1;
+  if (!block.includes("const symbol = notice.kind === \"joker\"")) {
+    if (oldSymbolIndex < 0 || oldSymbolEnd < 0)
+      throw new Error("No se encontró el cálculo del símbolo de Robar turno.");
+    const replacement = [
+      '                    const symbol = notice.kind === "joker"',
+      '                      ? "★"',
+      '                      : notice.kind === "stop"',
+      '                        ? "⊘"',
+      '                        : notice.kind === "reverse"',
+      '                          ? "↔"',
+      '                          : notice.kind === "swap"',
+      '                            ? "⇄"',
+      '                            : notice.kind === "category"',
+      '                              ? "C"',
+      '                              : notice.kind === "combo"',
+      '                                ? "COMBO"',
+      '                                : notice.kind === "steal"',
+      '                                  ? "☠"',
+      '                                  : notice.label;',
+    ].join("\n");
+    block =
+      block.slice(0, oldSymbolIndex) +
+      replacement +
+      block.slice(oldSymbolEnd + symbolEnd.length);
   }
 
-  const oldCardKind = [
-    "                          {centerCardLabel(",
-    '                            room.centerPile?.[room.centerPile.length - 1]?.kind ?? "letter",',
-    "                            notice.label,",
-  ].join("\n");
-  const newCardKind = [
-    "                          {centerCardLabel(",
-    '                            notice.kind ?? "letter",',
-    "                            notice.label,",
-  ].join("\n");
-  if (!block.includes(newCardKind)) {
-    if (!block.includes(oldCardKind))
-      throw new Error("No se encontró el contenido de la mini carta de Robar turno.");
-    block = block.replace(oldCardKind, newCardKind);
+  const oldCard = '<span className="turn-steal-slot-card">{symbol}</span>';
+  const newCard = '<span className={`turn-steal-slot-card ${notice.kind ?? "letter"}`}>{symbol}</span>';
+  if (!block.includes(newCard)) {
+    if (!block.includes(oldCard))
+      throw new Error("No se encontró la mini carta del event-slot de Robar turno.");
+    block = block.replace(oldCard, newCard);
   }
 
   return source.slice(0, blockStart) + block + source.slice(blockEnd);
@@ -173,20 +186,20 @@ route = replaceRequired(
 );
 await writeFile("app/api/rooms/route.ts", route, "utf8");
 
-// ---------- Client: render the exact card, not the current top card ----------
+// ---------- Client: render the exact card in the final standard event slot ----------
 const pagePath = "app/page.tsx";
 let page = await readFile(pagePath, "utf8");
 page = patchNoticeType(page, 'GameCard["kind"]', "Room UI");
-page = patchPriorityNotice(page);
+page = patchEventSlotNotice(page);
 await writeFile(pagePath, page, "utf8");
 
 // ---------- Visual parity ----------
 const cssPath = "app/ui-fixes.css";
 let css = await readFile(cssPath, "utf8");
-const cssMarker = "/* TURN STEAL real card identity v1 */";
+const cssMarker = "/* TURN STEAL real card identity v2 */";
 if (!css.includes(cssMarker)) {
   css += `\n\n${cssMarker}
-/* Center the joker star by geometry, not by the glyph's inline baseline. */
+/* Center the joker popup star by geometry instead of the glyph baseline. */
 .game-event-popup.joker .game-event-symbol,
 .game-event-symbol.joker {
   position: relative !important;
@@ -208,44 +221,46 @@ if (!css.includes(cssMarker)) {
   transform: none !important;
 }
 
-/* Robar turno shows the actual played card. These rules only guarantee the
-   miniature identity; the standard popup dimensions remain unchanged. */
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.joker {
+/* Robar turno keeps the standard popup geometry, but its miniature now mirrors
+   the real card type used to take the turn. */
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.joker {
   background: var(--gold, #f4bd3b) !important;
   color: var(--ink, #14213d) !important;
   -webkit-text-fill-color: var(--ink, #14213d) !important;
-  font-size: 20px !important;
+  border-color: rgba(255,255,255,.9) !important;
+  font: 950 20px/1 Arial, sans-serif !important;
 }
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.stop {
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.stop {
   background: var(--red, #ef5a4c) !important;
   color: #fff !important;
+  font: 950 16px/1 Arial, sans-serif !important;
 }
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.reverse {
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.reverse {
   background: var(--violet, #7556c9) !important;
   color: #fff !important;
+  font: 950 17px/1 Arial, sans-serif !important;
 }
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.swap {
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.swap {
   background: #159c95 !important;
   color: #fff !important;
+  font: 950 16px/1 Arial, sans-serif !important;
 }
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.category {
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.category {
   background: #df7a32 !important;
   color: #fff !important;
-  white-space: normal !important;
-  overflow-wrap: anywhere !important;
-  font-size: 6px !important;
-  line-height: 1.05 !important;
+  font: 950 12px/1 Arial, sans-serif !important;
 }
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.combo {
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.combo {
   background: linear-gradient(145deg, #20b9c8, #0f98aa) !important;
   color: #fff !important;
   font: 950 7px/1 Arial, sans-serif !important;
   white-space: nowrap !important;
 }
-.game-event-popup.turn-steal.turn-steal-priority-notice .turn-steal-event-card.steal {
+.event-slot .game-event-popup.turn-steal .turn-steal-slot-card.steal {
   background: #0c0d12 !important;
   color: #fff !important;
   border-color: #d5a92f !important;
+  font: 950 15px/1 Arial, sans-serif !important;
 }
 `;
   await writeFile(cssPath, css, "utf8");
@@ -256,8 +271,9 @@ const checks = [
   [await readFile("lib/game.ts", "utf8"), "turnStealCardKind?: CardKind;"],
   [await readFile("app/api/rooms/route.ts", "utf8"), "confirmedTurnStealKind = armed.kind;"],
   [await readFile("app/api/rooms/route.ts", "utf8"), 'kind: submission.turnStealCardKind ?? "letter"'],
+  [await readFile(pagePath, "utf8"), "TURN STEAL event-slot v2"],
   [await readFile(pagePath, "utf8"), "const turnStealCardDescription ="],
-  [await readFile(pagePath, "utf8"), '${notice.kind ?? "letter"}'],
+  [await readFile(pagePath, "utf8"), 'turn-steal-slot-card ${notice.kind ?? "letter"}'],
   [await readFile(cssPath, "utf8"), cssMarker],
 ];
 const missing = checks
@@ -266,4 +282,4 @@ const missing = checks
 if (missing.length)
   throw new Error(`Turn-steal card popup parity incompleto: ${missing.join(", ")}`);
 
-console.log("Turn steal popup now keeps the exact card identity; joker star is geometrically centered.");
+console.log("Turn steal popup now keeps the exact card identity in the standard event slot; joker star is geometrically centered.");
