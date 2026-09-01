@@ -21,6 +21,94 @@ function patchNoticeType(source, kindType, label) {
   return source.slice(0, start) + changed + source.slice(end);
 }
 
+function patchPriorityNotice(source) {
+  const marker = "TURN STEAL priority notice v2";
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex < 0)
+    throw new Error("No se encontró el bloque prioritario de Robar turno.");
+
+  const blockStart = source.lastIndexOf("              {/*", markerIndex);
+  const endAnchor = "              <div\n                ref={dropRef}";
+  const blockEnd = source.indexOf(endAnchor, markerIndex);
+  if (blockStart < 0 || blockEnd < 0)
+    throw new Error("No se pudo aislar el aviso prioritario de Robar turno.");
+
+  let block = source.slice(blockStart, blockEnd);
+
+  if (!block.includes("const turnStealCardDescription =")) {
+    const noticeLine = "                  const notice = room.lastTurnStealNotice!;";
+    if (!block.includes(noticeLine))
+      throw new Error("No se encontró la variable notice dentro de Robar turno.");
+
+    const description = [
+      noticeLine,
+      "                  const turnStealCardDescription =",
+      '                    notice.kind === "joker"',
+      '                      ? "un comodín"',
+      '                      : notice.kind === "stop"',
+      '                        ? "una carta Bloquear turno"',
+      '                        : notice.kind === "reverse"',
+      '                          ? "una Inversa"',
+      '                          : notice.kind === "swap"',
+      '                            ? "un SWAP"',
+      '                            : notice.kind === "category"',
+      '                              ? "una Nueva categoría"',
+      '                              : notice.kind === "combo"',
+      '                                ? "un COMBO"',
+      '                                : notice.kind === "steal"',
+      '                                  ? "una carta ROBO"',
+      '                                  : `otra ${notice.label}`;',
+    ].join("\n");
+    block = block.replace(noticeLine, description);
+  }
+
+  const oldDetail = [
+    "                  const detail = notice.actorId === playerId",
+    '                    ? `Te adelantaste con otra ${notice.label}.`',
+    "                    : notice.victimId === playerId",
+    '                      ? `${notice.actorName} se adelantó con otra ${notice.label}.`',
+    '                      : `Se adelantó con otra ${notice.label} antes que ${notice.victimName}.`;',
+  ].join("\n");
+  const newDetail = [
+    "                  const detail = notice.actorId === playerId",
+    '                    ? `Te adelantaste con ${turnStealCardDescription}.`',
+    "                    : notice.victimId === playerId",
+    '                      ? `${notice.actorName} se adelantó con ${turnStealCardDescription}.`',
+    '                      : `Se adelantó con ${turnStealCardDescription} antes que ${notice.victimName}.`;',
+  ].join("\n");
+  if (!block.includes(newDetail)) {
+    if (!block.includes(oldDetail))
+      throw new Error("No se encontró el texto actual del aviso de Robar turno.");
+    block = block.replace(oldDetail, newDetail);
+  }
+
+  const oldClass = 'className={`turn-steal-event-card mini-play-card ${room.centerPile?.[room.centerPile.length - 1]?.kind ?? "letter"}`}';
+  const newClass = 'className={`turn-steal-event-card mini-play-card ${notice.kind ?? "letter"}`}';
+  if (!block.includes(newClass)) {
+    if (!block.includes(oldClass))
+      throw new Error("No se encontró la clase de mini carta de Robar turno.");
+    block = block.replace(oldClass, newClass);
+  }
+
+  const oldCardKind = [
+    "                          {centerCardLabel(",
+    '                            room.centerPile?.[room.centerPile.length - 1]?.kind ?? "letter",',
+    "                            notice.label,",
+  ].join("\n");
+  const newCardKind = [
+    "                          {centerCardLabel(",
+    '                            notice.kind ?? "letter",',
+    "                            notice.label,",
+  ].join("\n");
+  if (!block.includes(newCardKind)) {
+    if (!block.includes(oldCardKind))
+      throw new Error("No se encontró el contenido de la mini carta de Robar turno.");
+    block = block.replace(oldCardKind, newCardKind);
+  }
+
+  return source.slice(0, blockStart) + block + source.slice(blockEnd);
+}
+
 // ---------- Shared state: remember the exact card used to steal the turn ----------
 let game = await readFile("lib/game.ts", "utf8");
 if (!game.includes("turnStealCardKind?: CardKind;")) {
@@ -89,74 +177,7 @@ await writeFile("app/api/rooms/route.ts", route, "utf8");
 const pagePath = "app/page.tsx";
 let page = await readFile(pagePath, "utf8");
 page = patchNoticeType(page, 'GameCard["kind"]', "Room UI");
-
-const noticeAnchor = "                  const notice = room.lastTurnStealNotice!;\n                  const title = notice.actorId === playerId";
-if (!page.includes("const turnStealCardDescription =")) {
-  if (!page.includes(noticeAnchor))
-    throw new Error("No se encontró el aviso prioritario de Robar turno.");
-  const description = [
-    "                  const notice = room.lastTurnStealNotice!;",
-    "                  const turnStealCardDescription =",
-    '                    notice.kind === "joker"',
-    '                      ? "un comodín"',
-    '                      : notice.kind === "stop"',
-    '                        ? "una carta Bloquear turno"',
-    '                        : notice.kind === "reverse"',
-    '                          ? "una Inversa"',
-    '                          : notice.kind === "swap"',
-    '                            ? "un SWAP"',
-    '                            : notice.kind === "category"',
-    '                              ? "una Nueva categoría"',
-    '                              : notice.kind === "combo"',
-    '                                ? "un COMBO"',
-    '                                : notice.kind === "steal"',
-    '                                  ? "una carta ROBO"',
-    '                                  : `otra ${notice.label}`;',
-    "                  const title = notice.actorId === playerId",
-  ].join("\n");
-  page = page.replace(noticeAnchor, description);
-}
-
-page = replaceRequired(
-  page,
-  [
-    "                  const detail = notice.actorId === playerId",
-    '                    ? `Te adelantaste con otra ${notice.label}.`',
-    "                    : notice.victimId === playerId",
-    '                      ? `${notice.actorName} se adelantó con otra ${notice.label}.`',
-    '                      : `Se adelantó con otra ${notice.label} antes que ${notice.victimName}.`;',
-  ].join("\n"),
-  [
-    "                  const detail = notice.actorId === playerId",
-    '                    ? `Te adelantaste con ${turnStealCardDescription}.`',
-    "                    : notice.victimId === playerId",
-    '                      ? `${notice.actorName} se adelantó con ${turnStealCardDescription}.`',
-    '                      : `Se adelantó con ${turnStealCardDescription} antes que ${notice.victimName}.`;',
-  ].join("\n"),
-  "texto natural del aviso de Robar turno",
-);
-
-page = replaceRequired(
-  page,
-  'className={`turn-steal-event-card mini-play-card ${room.centerPile?.[room.centerPile.length - 1]?.kind ?? "letter"}`}',
-  'className={`turn-steal-event-card mini-play-card ${notice.kind ?? "letter"}`}',
-  "clase visual de la carta real en Robar turno",
-);
-
-page = replaceRequired(
-  page,
-  [
-    "                          {centerCardLabel(",
-    '                            room.centerPile?.[room.centerPile.length - 1]?.kind ?? "letter",',
-    "                            notice.label,",
-  ].join("\n"),
-  [
-    "                          {centerCardLabel(",
-    '                            notice.kind ?? "letter",',
-    "                            notice.label,",
-  ].join("\n"),
-  "contenido de la carta real en Robar turno",
-);
+page = patchPriorityNotice(page);
 await writeFile(pagePath, page, "utf8");
 
 // ---------- Visual parity ----------
